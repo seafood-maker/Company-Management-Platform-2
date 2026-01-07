@@ -23,7 +23,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         <div className="bg-indigo-500 p-2 rounded-lg shadow-lg shadow-indigo-500/20">
           <i className="fas fa-car-side text-xl"></i>
         </div>
-        <h1 className="text-xl font-bold tracking-tight">FleetFlow</h1>
+        <h1 className="text-xl font-bold tracking-tight">專案組行程管理系統</h1>
       </div>
 
       {/* 2. 主要操作：新增行程 */}
