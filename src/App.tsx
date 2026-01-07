@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, Schedule, Vehicle, UserRole } from './types';
 import { MOCK_USERS } from './constants';
 import { storage } from './services/storage';
@@ -17,7 +16,7 @@ const App: React.FC = () => {
   const [editingSchedule, setEditingSchedule] = useState<Schedule | undefined>(undefined);
   const [view, setView] = useState<'calendar' | 'list'>('calendar');
 
-  // Load initial data
+  // 初始化讀取資料
   useEffect(() => {
     setSchedules(storage.getSchedules());
     setVehicles(storage.getVehicles());
@@ -40,7 +39,8 @@ const App: React.FC = () => {
 
   const handleSaveSchedule = (schedule: Schedule) => {
     let updated: Schedule[];
-    if (editingSchedule) {
+    const exists = schedules.find(s => s.id === schedule.id);
+    if (exists) {
       updated = schedules.map(s => s.id === schedule.id ? schedule : s);
     } else {
       updated = [...schedules, schedule];
@@ -107,4 +107,4 @@ const App: React.FC = () => {
   );
 };
 
-export default
+export default App;
