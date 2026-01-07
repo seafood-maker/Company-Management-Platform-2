@@ -7,23 +7,36 @@ import CalendarView from './components/Calendar';
 import ScheduleForm from './components/ScheduleForm';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
-import UserManagement from './components/UserManagement'; // 確保之後會建立這個檔案
+import UserManagement from './components/UserManagement';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [users, setUsers] = useState<User[]>([]); // 存放所有人員
+  const [users, setUsers] = useState<User[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | undefined>(undefined);
   const [view, setView] = useState<'calendar' | 'list' | 'user-mgmt'>('calendar');
 
-  // 初始化讀取資料
+  // 初始化：從 Google Firebase 讀取資料
   useEffect(() => {
-    setSchedules(storage.getSchedules());
-    setVehicles(storage.getVehicles());
-    setUsers(storage.getUsers()); // 從 storage 讀取人員清單
+    const initLoad = async () => {
+      try {
+        // 同時抓取人員與行程資料
+        const [u, s] = await Promise.all([
+          storage.getUsers(),
+          storage.getSchedules()
+        ]);
+        setUsers(u);
+        setSchedules(s);
+        setVehicles(storage.getVehicles());
+      } catch (error) {
+        console.error("初始化資料失敗:", error);
+      }
+    };
+    initLoad();
     
+    // 檢查本地登入狀態
     const savedUser = localStorage.getItem('fleetflow_user');
     if (savedUser) {
       setCurrentUser(JSON.parse(savedUser));
@@ -40,43 +53,52 @@ const App: React.FC = () => {
     localStorage.removeItem('fleetflow_user');
   };
 
-  const handleSaveSchedule = (schedule: Schedule) => {
-    let updated: Schedule[];
-    const exists = schedules.find(s => s.id === schedule.id);
-    if (exists) {
-      updated = schedules.map(s => s.id === schedule.id ? schedule : s);
-    } else {
-      updated = [...schedules, schedule];
+  // 儲存行程：存到 Google 雲端
+  const handleSaveSchedule = async (schedule: Schedule) => {
+    try {
+      await storage.saveSchedule(schedule); // 呼叫 Firebase 儲存
+      const updatedSchedules = await storage.getSchedules(); // 重新從雲端拉取最新清單
+      setSchedules(updatedSchedules);
+      setIsFormOpen(false);
+      setEditingSchedule(undefined);
+    } catch (error) {
+      alert("儲存失敗，請檢查網路連線。");
     }
-    setSchedules(updated);
-    storage.saveSchedules(updated);
-    setIsFormOpen(false);
-    setEditingSchedule(undefined);
   };
 
-  const handleDeleteSchedule = (id: string) => {
-    const updated = schedules.filter(s => s.id !== id);
-    setSchedules(updated);
-    storage.saveSchedules(updated);
+  // 刪除行程：從 Google 雲端刪除
+  const handleDeleteSchedule = async (id: string) => {
+    if (window.confirm("確定要刪除此行程嗎？")) {
+      try {
+        await storage.deleteSchedule(id); // 從 Firebase 刪除
+        const updatedSchedules = await storage.getSchedules();
+        setSchedules(updatedSchedules);
+      } catch (error) {
+        alert("刪除失敗。");
+      }
+    }
   };
 
-  // --- 管理員金鑰驗證功能 ---
+  // 新增人員：存到 Google 雲端
+  const handleAddUser = async (newUser: User) => {
+    try {
+      await storage.saveUser(newUser); // 存到 Firebase
+      const latestUsers = await storage.getUsers(); // 重新拉取最新名單
+      setUsers(latestUsers);
+      alert(`人員 ${newUser.name} 已同步至 Google 雲端！`);
+    } catch (error) {
+      alert("新增人員失敗。");
+    }
+  };
+
   const handleOpenUserMgmt = () => {
-    const adminKey = "123456"; // 這裡可以修改你的管理員金鑰
+    const adminKey = "123456"; // 這是你的管理員金鑰
     const input = prompt("請輸入管理員金鑰以進入人員管理：");
     if (input === adminKey) {
       setView('user-mgmt');
     } else if (input !== null) {
       alert("金鑰錯誤，拒絕存取。");
     }
-  };
-
-  // --- 新增人員功能 ---
-  const handleAddUser = (newUser: User) => {
-    const updatedUsers = [...users, newUser];
-    setUsers(updatedUsers);
-    storage.saveUsers(updatedUsers); // 儲存到 localStorage
-    alert(`人員 ${newUser.name} 新增成功！`);
   };
 
   const openEditForm = (schedule: Schedule) => {
@@ -89,7 +111,7 @@ const App: React.FC = () => {
   };
 
   if (!currentUser) {
-    // 登入畫面的人員選單現在會使用動態讀取的 users
+    // 登入畫面的人員清單
     return <Login onLogin={handleLogin} users={users.length > 0 ? users : MOCK_USERS} />;
   }
 
@@ -99,7 +121,7 @@ const App: React.FC = () => {
         onAddSchedule={() => { setEditingSchedule(undefined); setIsFormOpen(true); }} 
         activeView={view}
         setView={setView}
-        onOpenUserMgmt={handleOpenUserMgmt} // 傳遞金鑰驗證功能給側邊欄
+        onOpenUserMgmt={handleOpenUserMgmt}
       />
       
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -107,7 +129,6 @@ const App: React.FC = () => {
         
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
           <div className="max-w-6xl mx-auto">
-            {/* 根據 view 狀態切換顯示內容 */}
             {view === 'user-mgmt' ? (
               <UserManagement users={users} onAddUser={handleAddUser} />
             ) : (
@@ -133,6 +154,10 @@ const App: React.FC = () => {
         />
       )}
     </div>
+  );
+};
+
+export default App;
   );
 };
 
