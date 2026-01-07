@@ -1,8 +1,10 @@
-
 export enum UserRole {
   ADMIN = 'ADMIN',
   USER = 'USER'
 }
+
+// 新增行程類別
+export type ScheduleCategory = '會議' | '外勤' | '休假' | '其他';
 
 export interface User {
   id: string;
@@ -17,24 +19,24 @@ export interface Vehicle {
   plateNumber: string;
   name: string;
   type: string;
-  status: 'available' | 'maintenance' | 'busy';
+  status: 'available' | 'maintenance'; // 可預約 / 維修中
+  currentMileage: number; // 總里程
 }
 
 export interface Schedule {
   id: string;
   userId: string;
   userName: string;
-  date: string; // ISO format YYYY-MM-DD
-  startTime: string; // HH:mm
-  endTime: string; // HH:mm
+  date: string; 
+  startTime: string; 
+  endTime: string; 
   destination: string;
   purpose: string;
-  vehicleId: string | null; // null if no vehicle needed
+  category: ScheduleCategory; // 新增：類別
+  vehicleId: string | null;
   vehicleName?: string;
-}
-
-export interface AppState {
-  currentUser: User | null;
-  schedules: Schedule[];
-  vehicles: Vehicle[];
+  // 里程紀錄
+  startKm?: number; // 出發里程
+  endKm?: number;   // 回來里程
+  mileageCompleted?: boolean; // 是否已填寫里程
 }
