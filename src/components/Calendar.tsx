@@ -1,6 +1,5 @@
-
-import React, { useState, useRef, useEffect } from 'react';
-import { Schedule, User, UserRole } from '../types';
+import React, { useState, useRef } from 'react';
+import { Schedule, User, UserRole, ScheduleCategory } from '../types';
 
 interface CalendarProps {
   schedules: Schedule[];
@@ -17,15 +16,14 @@ const CalendarView: React.FC<CalendarProps> = ({ schedules, onEdit, onDelete, cu
   const month = currentMonth.getMonth();
   const monthName = currentMonth.toLocaleString('zh-TW', { month: 'long' });
 
-  const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+  // 日曆邏輯
+  const daysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
   const totalDays = daysInMonth(year, month);
-
   const prevMonth = () => setCurrentMonth(new Date(year, month - 1, 1));
   const nextMonth = () => setCurrentMonth(new Date(year, month + 1, 1));
   const goToToday = () => {
     const today = new Date();
     setCurrentMonth(new Date(today.getFullYear(), today.getMonth(), 1));
-    // Scroll to today will happen via effect if in current month
   };
 
   const getWeekday = (day: number) => {
@@ -38,37 +36,40 @@ const CalendarView: React.FC<CalendarProps> = ({ schedules, onEdit, onDelete, cu
     return today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
   };
 
+  // 1(6) 正則表達式提取車牌：從 "白色 SUV (ABC-1234)" 提取 "ABC-1234"
+  const extractPlate = (name?: string) => {
+    if (!name) return "";
+    const match = name.match(/\((.*?)\)/);
+    return match ? match[1] : name;
+  };
+
+  // 4. 模擬天氣預報邏輯 (隨機模擬，實際可串接 API)
+  const getWeatherIcon = (day: number) => {
+    const icons = ["☀️", "☁️", "🌤️", "🌧️"];
+    return icons[day % icons.length];
+  };
+
   const getSchedulesForDay = (day: number) => {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     return schedules.filter(s => s.date === dateStr).sort((a, b) => a.startTime.localeCompare(b.startTime));
   };
 
-  // 建立當月所有天數的陣列
   const days = Array.from({ length: totalDays }, (_, i) => i + 1);
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full max-h-[calc(100vh-160px)]">
       {/* 標題與控制列 */}
-      <div className="p-6 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white sticky top-0 z-10">
-        <h3 className="text-xl font-bold text-slate-800 flex items-center">
-          <i className="fas fa-list-ul text-indigo-500 mr-3"></i>
+      <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white sticky top-0 z-10">
+        <h3 className="text-lg font-bold text-slate-800 flex items-center">
+          <i className="fas fa-calendar-alt text-indigo-500 mr-2"></i>
           {year}年 {monthName}
         </h3>
         
         <div className="flex items-center space-x-2">
-          <button 
-            onClick={goToToday}
-            className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 border border-slate-200 rounded-lg transition"
-          >
-            今天
-          </button>
-          <div className="flex bg-slate-50 border border-slate-200 rounded-lg p-1">
-            <button onClick={prevMonth} className="p-2 text-slate-600 hover:text-indigo-600 transition">
-              <i className="fas fa-chevron-left"></i>
-            </button>
-            <button onClick={nextMonth} className="p-2 text-slate-600 hover:text-indigo-600 transition">
-              <i className="fas fa-chevron-right"></i>
-            </button>
+          <button onClick={goToToday} className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 border border-slate-200 rounded-lg">今天</button>
+          <div className="flex bg-slate-50 border border-slate-200 rounded-lg p-0.5">
+            <button onClick={prevMonth} className="p-1.5 text-slate-600 hover:text-indigo-600"><i className="fas fa-chevron-left text-xs"></i></button>
+            <button onClick={nextMonth} className="p-1.5 text-slate-600 hover:text-indigo-600"><i className="fas fa-chevron-right text-xs"></i></button>
           </div>
         </div>
       </div>
@@ -80,87 +81,91 @@ const CalendarView: React.FC<CalendarProps> = ({ schedules, onEdit, onDelete, cu
           const activeToday = isToday(day);
 
           return (
-            <div 
-              key={day} 
-              id={`day-${day}`}
-              className={`flex flex-col sm:flex-row p-4 transition hover:bg-slate-50/50 ${activeToday ? 'bg-indigo-50/30' : ''}`}
-            >
-              {/* 日期側欄 */}
-              <div className="flex sm:flex-col items-center sm:items-start sm:w-24 mb-3 sm:mb-0 shrink-0">
-                <div className={`text-2xl font-bold mr-2 sm:mr-0 ${activeToday ? 'text-indigo-600' : 'text-slate-700'}`}>
-                  {String(day).padStart(2, '0')}
+            <div key={day} className={`flex flex-col md:flex-row p-3 transition hover:bg-slate-50/50 ${activeToday ? 'bg-indigo-50/30' : ''}`}>
+              
+              {/* 1(4) 日期與天氣側欄 */}
+              <div className="flex md:flex-col items-center md:items-start md:w-20 mb-2 md:mb-0 shrink-0">
+                <div className="flex items-center space-x-2 md:space-x-0 md:flex-col">
+                  <div className={`text-xl font-bold ${activeToday ? 'text-indigo-600' : 'text-slate-700'}`}>
+                    {String(day).padStart(2, '0')}
+                  </div>
+                  <div className="text-[10px] font-medium text-slate-400 uppercase">
+                    {getWeekday(day)}
+                  </div>
                 </div>
-                <div className={`text-sm font-medium ${activeToday ? 'text-indigo-500' : 'text-slate-400'}`}>
-                  {getWeekday(day)}
-                  {activeToday && <span className="ml-2 sm:ml-0 sm:block text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded uppercase">Today</span>}
+                {/* 天氣顯示 */}
+                <div className="ml-3 md:ml-0 md:mt-1 text-sm" title="預估天氣">
+                  {getWeatherIcon(day)}
                 </div>
               </div>
 
-              {/* 行程內容 */}
-              <div className="flex-1 space-y-3">
+              {/* 1(1) 行程內容 - 佈局重構 */}
+              <div className="flex-1 space-y-1">
                 {daySchedules.length > 0 ? (
                   daySchedules.map(s => (
                     <div 
                       key={s.id}
-                      onClick={() => onEdit(s)}
-                      className={`group relative p-4 rounded-xl border transition-all cursor-pointer hover:shadow-md ${
-                        s.userId === currentUser.id 
-                          ? 'bg-white border-indigo-200 shadow-sm' 
-                          : 'bg-white border-slate-200 shadow-sm'
-                      }`}
+                      className="group flex flex-row items-center justify-between p-2 bg-white border border-slate-100 rounded-lg hover:border-indigo-200 hover:shadow-sm transition text-[13px]"
                     >
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-                        <div className="flex items-center space-x-3">
-                          <div className={`w-2 h-10 rounded-full ${s.userId === currentUser.id ? 'bg-indigo-500' : 'bg-slate-300'}`}></div>
-                          <div>
-                            <div className="flex items-center space-x-2">
-                              <span className="text-sm font-bold text-slate-900">{s.startTime} - {s.endTime}</span>
-                              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold uppercase">{s.userName}</span>
-                            </div>
-                            <h4 className="text-base font-semibold text-slate-800 mt-0.5">{s.destination}</h4>
-                          </div>
+                      {/* 左側資訊區 */}
+                      <div className="flex items-center space-x-3 flex-1 min-w-0">
+                        {/* 1(2) 時間 (精簡高度) */}
+                        <div className="text-indigo-600 font-bold w-24 shrink-0">
+                          <i className="far fa-clock mr-1 text-[10px]"></i>
+                          {s.startTime} - {s.endTime}
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-3 md:text-right">
-                          {s.vehicleId && (
-                            <div className="flex items-center text-xs font-medium text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
-                              <i className="fas fa-car mr-1.5"></i>
-                              {s.vehicleName}
-                            </div>
-                          )}
-                          <div className="text-xs text-slate-500">
-                            <i className="fas fa-info-circle mr-1.5"></i>
-                            {s.purpose || '無填寫事由'}
-                          </div>
+                        {/* 1(3) 類別標籤 */}
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                          s.category === '會議' ? 'bg-blue-100 text-blue-600' :
+                          s.category === '外勤' ? 'bg-green-100 text-green-600' :
+                          s.category === '休假' ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {s.category || '其他'}
+                        </span>
+
+                        {/* 1(4) 人員 (加粗) */}
+                        <div className="font-bold text-slate-800 w-20 shrink-0 truncate">
+                          {s.userName}
                         </div>
+
+                        {/* 1(5) 事由 (自動截斷) */}
+                        <div className="text-slate-500 truncate flex-1 hidden lg:block">
+                          {s.purpose || '無填寫事由'}
+                        </div>
+
+                        {/* 1(6) 車牌 (精簡顯示) */}
+                        {s.vehicleId && (
+                          <div className="flex items-center bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md border border-amber-100 font-mono text-[11px] shrink-0">
+                            <i className="fas fa-car mr-1.5 text-[10px]"></i>
+                            {extractPlate(s.vehicleName)}
+                          </div>
+                        )}
                       </div>
 
-                      {/* 操作按鈕 (僅限本人或管理員) */}
-                      {(s.userId === currentUser.id || currentUser.role === UserRole.ADMIN) && (
-                        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1">
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); onEdit(s); }}
-                            className="p-1.5 text-slate-400 hover:text-indigo-600 transition"
-                            title="編輯"
-                          >
-                            <i className="fas fa-edit text-xs"></i>
-                          </button>
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if(confirm('確定要刪除此行程？')) onDelete(s.id);
-                            }}
-                            className="p-1.5 text-slate-400 hover:text-red-500 transition"
-                            title="刪除"
-                          >
-                            <i className="fas fa-trash-alt text-xs"></i>
-                          </button>
-                        </div>
-                      )}
+                      {/* 操作按鈕 */}
+                      <div className="flex items-center space-x-1 ml-4 opacity-0 group-hover:opacity-100 transition">
+                        {(s.userId === currentUser.id || currentUser.role === UserRole.ADMIN) && (
+                          <>
+                            <button 
+                              onClick={() => onEdit(s)}
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 transition"
+                            >
+                              <i className="fas fa-edit text-xs"></i>
+                            </button>
+                            <button 
+                              onClick={() => { if(confirm('確定要刪除？')) onDelete(s.id); }}
+                              className="p-1.5 text-slate-400 hover:text-red-500 transition"
+                            >
+                              <i className="fas fa-trash-alt text-xs"></i>
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   ))
                 ) : (
-                  <div className="py-4 border border-dashed border-slate-200 rounded-xl flex items-center justify-center text-slate-300 text-sm italic">
+                  <div className="py-2 text-slate-300 text-[11px] italic">
                     今日暫無行程
                   </div>
                 )}
