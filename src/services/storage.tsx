@@ -13,6 +13,10 @@ export const storage = {
   saveUser: async (user: User) => {
     await setDoc(doc(db, "users", user.id), user);
   },
+  // 新增：刪除人員功能
+  deleteUser: async (id: string) => {
+    await deleteDoc(doc(db, "users", id));
+  },
 
   // --- 行程管理 ---
   getSchedules: async (): Promise<Schedule[]> => {
