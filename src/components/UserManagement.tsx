@@ -4,9 +4,10 @@ import { User, UserRole } from '../types';
 interface Props {
   users: User[];
   onAddUser: (user: User) => void;
+  onDeleteUser: (id: string) => void; // 新增這行
 }
 
-const UserManagement: React.FC<Props> = ({ users, onAddUser }) => {
+const UserManagement: React.FC<Props> = ({ users, onAddUser, onDeleteUser }) => {
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState<UserRole>(UserRole.USER);
 
@@ -24,52 +25,79 @@ const UserManagement: React.FC<Props> = ({ users, onAddUser }) => {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-      <h3 className="text-xl font-bold mb-6">人員管理</h3>
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 animate-in fade-in duration-500">
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="text-xl font-bold text-slate-800">人員管理</h3>
+      </div>
       
       {/* 新增表單 */}
-      <form onSubmit={handleSubmit} className="mb-8 p-4 bg-slate-50 rounded-xl flex flex-wrap gap-4 items-end">
-        <div>
-          <label className="block text-sm font-medium mb-1">姓名</label>
+      <form onSubmit={handleSubmit} className="mb-8 p-4 bg-slate-50 rounded-xl flex flex-wrap gap-4 items-end border border-slate-100">
+        <div className="flex-1 min-w-[200px]">
+          <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">姓名</label>
           <input 
             value={newName} 
             onChange={e => setNewName(e.target.value)}
-            className="border p-2 rounded-lg" required
+            className="w-full border border-slate-200 p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition" 
+            placeholder="請輸入姓名"
+            required
           />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1">角色</label>
+          <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">角色</label>
           <select 
             value={newRole} 
             onChange={e => setNewRole(e.target.value as UserRole)}
-            className="border p-2 rounded-lg"
+            className="border border-slate-200 p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition"
           >
             <option value={UserRole.USER}>一般使用者</option>
             <option value={UserRole.ADMIN}>管理員</option>
           </select>
         </div>
-        <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-lg">新增人員</button>
+        <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2.5 rounded-lg transition shadow-md">
+          <i className="fas fa-user-plus mr-2"></i>新增人員
+        </button>
       </form>
 
       {/* 人員列表 */}
-      <table className="w-full text-left">
-        <thead>
-          <tr className="border-b">
-            <th className="py-2">頭像</th>
-            <th>姓名</th>
-            <th>角色</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map(u => (
-            <tr key={u.id} className="border-b">
-              <td className="py-2"><img src={u.avatar} className="w-8 h-8 rounded-full" /></td>
-              <td>{u.name}</td>
-              <td>{u.role}</td>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left">
+          <thead>
+            <tr className="border-b border-slate-100 text-slate-400 text-sm">
+              <th className="py-3 font-semibold">人員</th>
+              <th className="py-3 font-semibold">角色</th>
+              <th className="py-3 font-semibold text-right">操作</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {users.map(u => (
+              <tr key={u.id} className="group hover:bg-slate-50/50 transition">
+                <td className="py-4">
+                  <div className="flex items-center space-x-3">
+                    <img src={u.avatar} className="w-10 h-10 rounded-full border border-slate-100" alt={u.name} />
+                    <span className="font-medium text-slate-700">{u.name}</span>
+                  </div>
+                </td>
+                <td className="py-4">
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                    u.role === UserRole.ADMIN ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {u.role}
+                  </span>
+                </td>
+                <td className="py-4 text-right">
+                  <button 
+                    onClick={() => onDeleteUser(u.id)}
+                    className="text-slate-300 hover:text-red-500 p-2 transition"
+                    title="刪除人員"
+                  >
+                    <i className="fas fa-trash-alt"></i>
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };
