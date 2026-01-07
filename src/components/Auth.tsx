@@ -9,12 +9,18 @@ interface LoginProps {
 
 const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
   const [selectedUserId, setSelectedUserId] = useState('');
+  const [password, setPassword] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const user = users.find(u => u.id === selectedUserId);
     if (user) {
-      onLogin(user);
+      // 驗證 4 位數密碼 (如果新帳號還沒設密碼，預設為 0000)
+      if (user.password === password || (!user.password && password === "0000")) {
+        onLogin(user);
+      } else {
+        alert("密碼錯誤！");
+      }
     }
   };
 
