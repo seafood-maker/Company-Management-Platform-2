@@ -16,7 +16,7 @@ const CalendarView: React.FC<CalendarProps> = ({ schedules, onEdit, onDelete, cu
   const month = currentMonth.getMonth();
   const monthName = currentMonth.toLocaleString('zh-TW', { month: 'long' });
 
-  // --- 日曆功能邏輯 ---
+  // --- 1. 日曆導覽邏輯 (完整保留) ---
   const daysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
   const totalDays = daysInMonth(year, month);
   
@@ -37,17 +37,11 @@ const CalendarView: React.FC<CalendarProps> = ({ schedules, onEdit, onDelete, cu
     return today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
   };
 
-  // 1(6) 正則提取車牌
+  // --- 2. 資訊處理邏輯 (完整保留) ---
   const extractPlate = (name?: string) => {
     if (!name) return "";
     const match = name.match(/\((.*?)\)/);
     return match ? match[1] : name;
-  };
-
-  // 天氣圖示模擬
-  const getWeatherIcon = (day: number) => {
-    const icons = ["☀️", "☁️", "🌤️", "🌧️"];
-    return icons[day % icons.length];
   };
 
   const getSchedulesForDay = (day: number) => {
@@ -57,10 +51,33 @@ const CalendarView: React.FC<CalendarProps> = ({ schedules, onEdit, onDelete, cu
 
   const days = Array.from({ length: totalDays }, (_, i) => i + 1);
 
+  // --- 3. 天氣跑馬燈內容 ---
+  const weatherReport = "台北 ☀️ 24°C | 新北 ☁️ 23°C | 桃園 🌤️ 22°C | 新竹 🌬️ 21°C | 台中 ☀️ 25°C | 台南 ☀️ 27°C | 高雄 ☀️ 28°C | 基隆 🌧️ 19°C | 宜蘭 🌧️ 20°C | 花蓮 🌤️ 21°C | 台東 ☀️ 24°C";
+
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full max-h-[calc(100vh-160px)]">
       
-      {/* 1. 標題與月份控制列 */}
+      {/* 4. 天氣跑馬燈 (頂部顯示) */}
+      <div className="bg-slate-900 text-white py-2 px-4 overflow-hidden relative border-b border-slate-800">
+        <div className="whitespace-nowrap inline-block animate-marquee text-xs font-medium">
+          <span className="mx-4"><i className="fas fa-bullhorn mr-2 text-indigo-400"></i>今日全台氣象預報：{weatherReport}</span>
+          <span className="mx-4"><i className="fas fa-bullhorn mr-2 text-indigo-400"></i>今日全台氣象預報：{weatherReport}</span>
+        </div>
+      </div>
+
+      {/* 跑馬燈動畫 CSS */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes marquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .animate-marquee {
+          display: inline-block;
+          animation: marquee 35s linear infinite;
+        }
+      `}} />
+
+      {/* 5. 標題與月份控制列 (完整保留樣式) */}
       <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white sticky top-0 z-10">
         <h3 className="text-lg font-bold text-slate-800 flex items-center">
           <i className="fas fa-calendar-alt text-indigo-500 mr-2"></i>
@@ -70,13 +87,13 @@ const CalendarView: React.FC<CalendarProps> = ({ schedules, onEdit, onDelete, cu
         <div className="flex items-center space-x-2">
           <button onClick={goToToday} className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 border border-slate-200 rounded-lg transition">今天</button>
           <div className="flex bg-slate-50 border border-slate-200 rounded-lg p-0.5">
-            <button onClick={prevMonth} className="p-1.5 text-slate-600 hover:text-indigo-600"><i className="fas fa-chevron-left text-xs"></i></button>
-            <button onClick={nextMonth} className="p-1.5 text-slate-600 hover:text-indigo-600"><i className="fas fa-chevron-right text-xs"></i></button>
+            <button onClick={prevMonth} className="p-1.5 text-slate-600 hover:text-indigo-600 transition"><i className="fas fa-chevron-left text-xs"></i></button>
+            <button onClick={nextMonth} className="p-1.5 text-slate-600 hover:text-indigo-600 transition"><i className="fas fa-chevron-right text-xs"></i></button>
           </div>
         </div>
       </div>
 
-      {/* 2. 逐日列表區塊 */}
+      {/* 6. 逐日列表區塊 */}
       <div ref={listRef} className="flex-1 overflow-y-auto divide-y divide-slate-100">
         {days.map(day => {
           const daySchedules = getSchedulesForDay(day);
@@ -85,7 +102,7 @@ const CalendarView: React.FC<CalendarProps> = ({ schedules, onEdit, onDelete, cu
           return (
             <div key={day} className={`flex flex-col md:flex-row p-3 transition hover:bg-slate-50/50 ${activeToday ? 'bg-indigo-50/30' : ''}`}>
               
-              {/* 日期與天氣側欄 (維持原本功能) */}
+              {/* 日期側欄 (已移除單日天氣圖示) */}
               <div className="flex md:flex-col items-center md:items-start md:w-20 mb-2 md:mb-0 shrink-0">
                 <div className="flex items-center space-x-2 md:space-x-0 md:flex-col">
                   <div className={`text-xl font-bold ${activeToday ? 'text-indigo-600' : 'text-slate-700'}`}>
@@ -95,12 +112,9 @@ const CalendarView: React.FC<CalendarProps> = ({ schedules, onEdit, onDelete, cu
                     {getWeekday(day)}
                   </div>
                 </div>
-                <div className="ml-3 md:ml-0 md:mt-1 text-sm" title="預估天氣">
-                  {getWeatherIcon(day)}
-                </div>
               </div>
 
-              {/* 行程列表區 (強制單行重構) */}
+              {/* 行程列表區 (單行重構完整保留) */}
               <div className="flex-1 space-y-1 overflow-hidden">
                 {daySchedules.length > 0 ? (
                   daySchedules.map(s => (
@@ -131,14 +145,14 @@ const CalendarView: React.FC<CalendarProps> = ({ schedules, onEdit, onDelete, cu
                           {s.userName}
                         </div>
 
-                        {/* 事由與地點：合併單行顯示並自動截斷 (關鍵修復 5) */}
+                        {/* 事由與地點：單行顯示並自動截斷 */}
                         <div className="text-slate-500 truncate flex-1 min-w-0" title={`${s.destination}: ${s.purpose}`}>
                           <span className="text-slate-700 font-medium">{s.destination}</span>
                           <span className="mx-1 opacity-50">|</span>
                           <span>{s.purpose || '無填寫事由'}</span>
                         </div>
 
-                        {/* 車牌 (提取括號內容) */}
+                        {/* 車牌 */}
                         {s.vehicleId && (
                           <div className="flex items-center bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md border border-amber-100 font-mono text-[11px] shrink-0">
                             <i className="fas fa-car mr-1.5 text-[10px]"></i>
@@ -147,7 +161,7 @@ const CalendarView: React.FC<CalendarProps> = ({ schedules, onEdit, onDelete, cu
                         )}
                       </div>
 
-                      {/* 右側操作區：權限判斷 (關鍵修復 1) */}
+                      {/* 右側操作區：權限判斷與刪除功能 (完整保留) */}
                       <div className="flex items-center space-x-1 ml-4 shrink-0 opacity-0 group-hover:opacity-100 transition">
                         {(s.userId === currentUser.id || currentUser.role === UserRole.ADMIN) && (
                           <>
@@ -159,7 +173,7 @@ const CalendarView: React.FC<CalendarProps> = ({ schedules, onEdit, onDelete, cu
                               <i className="fas fa-edit text-xs"></i>
                             </button>
                             <button 
-                              onClick={() => { if(confirm('確定要刪除此行程？')) onDelete(s.id); }}
+                              onClick={() => { if(window.confirm('確定要刪除此行程？')) onDelete(s.id); }}
                               className="p-1.5 text-slate-400 hover:text-red-500 transition"
                               title="刪除行程"
                             >
