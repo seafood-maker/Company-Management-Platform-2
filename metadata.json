@@ -1,0 +1,7 @@
+{
+  "name": "FleetFlow - Schedule & Vehicle Management",
+  "description": "A comprehensive enterprise system for managing team schedules and vehicle dispatching with collision detection and a modern calendar interface.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
