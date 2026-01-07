@@ -12,6 +12,7 @@ export interface User {
   name: string;
   role: UserRole;
   avatar?: string;
+  password?: string; // 新增：4位數密碼
 }
 
 export interface Vehicle {
