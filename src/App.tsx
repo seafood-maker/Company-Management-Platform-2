@@ -8,12 +8,12 @@ import ScheduleForm from './components/ScheduleForm';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import UserManagement from './components/UserManagement';
-import VehicleManagement from './components/VehicleManagement'; // 新增
-import MileageLog from './components/MileageLog'; // 新增
-import ProfileSettings from './components/ProfileSettings'; // 新增
+import VehicleManagement from './components/VehicleManagement'; 
+import MileageLog from './components/MileageLog'; 
+import ProfileSettings from './components/ProfileSettings'; 
 
 const App: React.FC = () => {
-  // --- 狀態管理 ---
+  // --- 1. 狀態管理 (保留所有原始狀態) ---
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -21,16 +21,16 @@ const App: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | undefined>(undefined);
   
-  // 擴充 view 狀態，包含所有新頁面
+  // 頁面視圖狀態：calendar, user-mgmt, vehicle-mgmt, mileage-log, profile
   const [view, setView] = useState<'calendar' | 'user-mgmt' | 'vehicle-mgmt' | 'mileage-log' | 'profile'>('calendar');
 
-  // --- 初始化：從雲端抓取所有資料 ---
+  // --- 2. 雲端資料同步邏輯 ---
   const refreshData = async () => {
     try {
       const [u, s, v] = await Promise.all([
         storage.getUsers(),
         storage.getSchedules(),
-        storage.getVehicles() // 現在車輛也是從雲端抓取
+        storage.getVehicles() 
       ]);
       setUsers(u);
       setSchedules(s);
@@ -46,7 +46,7 @@ const App: React.FC = () => {
     if (savedUser) setCurrentUser(JSON.parse(savedUser));
   }, []);
 
-  // --- 登入/登出 ---
+  // --- 3. 帳號登入/登出 ---
   const handleLogin = (user: User) => {
     setCurrentUser(user);
     localStorage.setItem('fleetflow_user', JSON.stringify(user));
@@ -58,59 +58,89 @@ const App: React.FC = () => {
     setView('calendar');
   };
 
-  // --- 行程操作 ---
+  // --- 4. 行程操作 (含刪除立即同步) ---
   const handleSaveSchedule = async (schedule: Schedule) => {
-    await storage.saveSchedule(schedule);
-    await refreshData();
-    setIsFormOpen(false);
-    setEditingSchedule(undefined);
+    try {
+      await storage.saveSchedule(schedule);
+      await refreshData();
+      setIsFormOpen(false);
+      setEditingSchedule(undefined);
+    } catch (error) {
+      alert("儲存失敗");
+    }
   };
 
   const handleDeleteSchedule = async (id: string) => {
     if (window.confirm("確定要刪除此行程嗎？")) {
-      await storage.deleteSchedule(id);
-      await refreshData();
+      try {
+        await storage.deleteSchedule(id);
+        // 【修正點】立即更新本地狀態，不必等待雲端重新載入
+        setSchedules(prev => prev.filter(s => s.id !== id));
+      } catch (error) {
+        alert("刪除行程失敗");
+      }
     }
   };
 
-  // --- 人員管理 ---
+  // --- 5. 人員管理 (含刪除立即同步) ---
   const handleAddUser = async (newUser: User) => {
-    await storage.saveUser(newUser);
-    await refreshData();
-    alert(`人員 ${newUser.name} 已新增`);
+    try {
+      await storage.saveUser(newUser);
+      await refreshData();
+      alert(`人員 ${newUser.name} 已新增`);
+    } catch (error) {
+      alert("新增人員失敗");
+    }
   };
 
   const handleDeleteUser = async (id: string) => {
     if (id === currentUser?.id) return alert("不能刪除自己");
     if (window.confirm("確定要刪除此人員？")) {
-      await storage.deleteUser(id);
-      await refreshData();
+      try {
+        await storage.deleteUser(id);
+        // 【修正點】立即更新本地狀態，讓人員立刻消失
+        setUsers(prev => prev.filter(u => u.id !== id));
+      } catch (error) {
+        alert("刪除人員失敗");
+      }
     }
   };
 
-  // --- 車輛管理操作 ---
+  // --- 6. 車輛管理操作 (含刪除立即同步) ---
   const handleSaveVehicle = async (vehicle: Vehicle) => {
-    await storage.saveVehicle(vehicle);
-    await refreshData();
+    try {
+      await storage.saveVehicle(vehicle);
+      await refreshData();
+    } catch (error) {
+      alert("儲存車輛失敗");
+    }
   };
 
   const handleDeleteVehicle = async (id: string) => {
     if (window.confirm("確定要刪除此車輛？")) {
-      await storage.deleteVehicle(id);
-      await refreshData();
+      try {
+        await storage.deleteVehicle(id);
+        // 【修正點】立即更新本地車輛清單
+        setVehicles(prev => prev.filter(v => v.id !== id));
+      } catch (error) {
+        alert("刪除車輛失敗");
+      }
     }
   };
 
-  // --- 個人設定更新 ---
+  // --- 7. 個人設定與管理員驗證 ---
   const handleUpdateProfile = async (updatedUser: User) => {
-    await storage.saveUser(updatedUser);
-    setCurrentUser(updatedUser);
-    localStorage.setItem('fleetflow_user', JSON.stringify(updatedUser));
-    await refreshData();
-    alert("個人資料已更新");
+    try {
+      await storage.saveUser(updatedUser);
+      setCurrentUser(updatedUser);
+      localStorage.setItem('fleetflow_user', JSON.stringify(updatedUser));
+      await refreshData();
+      alert("個人資料已更新");
+    } catch (error) {
+      alert("更新失敗");
+    }
   };
 
-  // --- 權限驗證進入管理頁面 ---
   const handleVerifyAdmin = (targetView: 'user-mgmt' | 'vehicle-mgmt') => {
     const adminKey = "123456"; 
     const input = prompt("請輸入管理員金鑰：");
@@ -130,14 +160,14 @@ const App: React.FC = () => {
     setIsFormOpen(true);
   };
 
-  // --- 渲染判斷 ---
+  // --- 8. 介面渲染 ---
   if (!currentUser) {
     return <Login onLogin={handleLogin} users={users.length > 0 ? users : MOCK_USERS} />;
   }
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
-      {/* 側邊欄：傳遞新視圖的切換功能 */}
+      {/* 側邊欄 */}
       <Sidebar 
         onAddSchedule={() => { setEditingSchedule(undefined); setIsFormOpen(true); }} 
         activeView={view}
@@ -147,7 +177,7 @@ const App: React.FC = () => {
       />
       
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* 標題列：點擊頭像或姓名可進入個人設定 */}
+        {/* 標題列 */}
         <Header 
           user={currentUser} 
           onLogout={handleLogout} 
@@ -156,7 +186,7 @@ const App: React.FC = () => {
         
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
           <div className="max-w-6xl mx-auto">
-            {/* 根據 view 狀態切換顯示內容 */}
+            {/* 視圖切換邏輯 */}
             {view === 'calendar' && (
               <CalendarView 
                 schedules={schedules} 
@@ -200,6 +230,7 @@ const App: React.FC = () => {
         </main>
       </div>
 
+      {/* 彈出表單 */}
       {isFormOpen && (
         <ScheduleForm
           onClose={() => setIsFormOpen(false)}
