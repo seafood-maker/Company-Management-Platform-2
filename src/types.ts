@@ -1,9 +1,11 @@
+// src/types.ts 完整修正版
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   USER = 'USER'
 }
 
-// 新增行程類別
+// 行程類別
 export type ScheduleCategory = '會議' | '外勤' | '休假' | '其他';
 
 export interface User {
@@ -12,7 +14,12 @@ export interface User {
   name: string;
   role: UserRole;
   avatar?: string;
-  password?: string; // 新增：4位數密碼
+  password?: string; // 4位數密碼
+}
+
+export interface Project {
+  id: string;
+  name: string;
 }
 
 export interface Vehicle {
@@ -21,12 +28,7 @@ export interface Vehicle {
   name: string;
   type: string;
   status: 'available' | 'maintenance'; // 可預約 / 維修中
-  currentMileage: number; // 總里程
-}
-
-export interface Project {
-  id: string;
-  name: string;
+  totalMileage: number; // 修正名稱：總行駛里程數 (原為 currentMileage)
 }
 
 export interface Schedule {
@@ -36,14 +38,18 @@ export interface Schedule {
   date: string; 
   startTime: string; 
   endTime: string; 
-  // destination: string; // 移除此欄位
-  purpose: string; // 對應你的「事由/目的地」
+  purpose: string; // 事由/目的地
   category: ScheduleCategory;
-  projectName: string; // 新增：計畫名稱
-  accompanimentIds: string[]; // 新增：同行人員 ID 列表
+  projectName: string; // 計畫名稱
+  accompanimentIds: string[]; // 同行人員 ID 列表
   vehicleId: string | null;
   vehicleName?: string;
-  startKm?: number;
-  endKm?: number;
-  mileageCompleted?: boolean;
+  
+  // --- 里程與維護紀錄欄位 ---
+  startKm?: number;      // 出發里程
+  endKm?: number;        // 結束里程
+  tripMileage?: number;  // 當次行駛里程 (結束 - 出發)
+  isRefueled?: boolean;  // 是否加油
+  isWashed?: boolean;    // 是否洗車
+  mileageCompleted?: boolean; // 是否已填寫里程
 }
