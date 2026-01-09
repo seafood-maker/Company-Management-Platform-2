@@ -141,15 +141,15 @@ const App: React.FC = () => {
     }
   };
 
-  const handleVerifyAdmin = (targetView: 'user-mgmt' | 'vehicle-mgmt') => {
-    const adminKey = "123456"; 
-    const input = prompt("請輸入管理員金鑰：");
-    if (input === adminKey) {
-      setView(targetView);
-    } else if (input !== null) {
-      alert("金鑰錯誤");
-    }
-  };
+  const handleVerifyAdmin = (targetView: string) => {
+  const adminKey = "123456"; 
+  const input = prompt("請輸入管理員金鑰：");
+  if (input === adminKey) {
+    setView(targetView as any); // 驗證成功後切換到指定的視圖
+  } else if (input !== null) {
+    alert("金鑰錯誤");
+  }
+ };
 
   const openEditForm = (schedule: Schedule) => {
     if (currentUser?.id !== schedule.userId && currentUser?.role !== UserRole.ADMIN) {
