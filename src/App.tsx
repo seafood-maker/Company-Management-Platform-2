@@ -270,7 +270,8 @@ const App: React.FC = () => {
 
             {view === 'mileage-log' && (
               <MileageLog 
-                schedules={schedules} 
+                schedules={schedules}
+                vehicles={vehicles}
                 currentUser={currentUser} 
                 onRefresh={refreshData} 
               />
