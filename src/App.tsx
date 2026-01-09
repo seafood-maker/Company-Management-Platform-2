@@ -214,6 +214,7 @@ const App: React.FC = () => {
                 onEdit={openEditForm}
                 onDelete={handleDeleteSchedule}
                 currentUser={currentUser}
+                users={users} 
               />
             )}
 
