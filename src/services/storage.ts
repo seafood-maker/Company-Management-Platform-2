@@ -1,6 +1,7 @@
 import { db } from '../lib/firebase';
 import { collection, getDocs, getDoc, setDoc, doc, deleteDoc, query, orderBy, updateDoc } from "firebase/firestore";
 import { User, Schedule, Vehicle, Project } from '../types';
+// 保留匯入以維持引用完整性，但下方的邏輯已不再將它們作為「沒資料時的預設值」
 import { MOCK_VEHICLES, MOCK_USERS } from '../constants';
 
 export const storage = {
@@ -8,7 +9,8 @@ export const storage = {
   getUsers: async (): Promise<User[]> => {
     const querySnapshot = await getDocs(collection(db, "users"));
     const users = querySnapshot.docs.map(d => ({ ...d.data(), id: d.id } as User));
-    return users.length > 0 ? users : MOCK_USERS;
+    // 【修正點】直接回傳資料庫內容。如果資料庫是空的，就回傳空陣列，不再顯示模擬同仁。
+    return users;
   },
   saveUser: async (user: User) => {
     await setDoc(doc(db, "users", user.id), user);
@@ -21,7 +23,8 @@ export const storage = {
   getVehicles: async (): Promise<Vehicle[]> => {
     const querySnapshot = await getDocs(collection(db, "vehicles"));
     const vehicles = querySnapshot.docs.map(d => ({ ...d.data(), id: d.id } as Vehicle));
-    return vehicles.length > 0 ? vehicles : MOCK_VEHICLES;
+    // 【修正點】直接回傳資料庫內容。這會解決「自動出現白色 SUV、黑色房車」的問題。
+    return vehicles;
   },
   saveVehicle: async (vehicle: Vehicle) => {
     await setDoc(doc(db, "vehicles", vehicle.id), vehicle);
@@ -58,10 +61,10 @@ export const storage = {
     // 更新到車輛資料表中
     const vehRef = doc(db, "vehicles", vehicleId);
     await updateDoc(vehRef, { totalMileage: total });
-    console.log(`同步觸發：車輛 ${vehicleId} 重新計算後的總里程為: ${total}`);
+    console.log(`同步完成：車輛 ${vehicleId} 的總行駛里程數已更新為: ${total}`);
   },
 
-  // 修正存檔邏輯：儲存後自動觸發重新加總
+  // 修正存檔邏輯：儲存後自動觸發重新加總，確保數據同步
   saveSchedule: async (schedule: Schedule) => {
     // 存檔前自動計算當次行駛里程 (Trip Mileage)
     if (schedule.mileageCompleted && schedule.startKm !== undefined && schedule.endKm !== undefined) {
@@ -70,7 +73,7 @@ export const storage = {
 
     await setDoc(doc(db, "schedules", schedule.id), schedule);
     
-    // 如果這筆紀錄有用到車，就必須同步該車的總里程
+    // 如果這筆紀錄有用到車，就觸發同步
     if (schedule.vehicleId && schedule.vehicleId !== 'none') {
       await storage.syncVehicleMileage(schedule.vehicleId);
     }
@@ -78,14 +81,14 @@ export const storage = {
 
   // 修正刪除邏輯：刪除後也要重新加總里程
   deleteSchedule: async (id: string) => {
-    // 刪除前先抓取這筆資料，才知道是哪一台車需要重新同步
+    // 刪除前先抓取這筆資料，確認車輛 ID
     const docRef = doc(db, "schedules", id);
     const docSnap = await getDoc(docRef);
     const data = docSnap.data() as Schedule;
 
     await deleteDoc(docRef);
 
-    // 刪除後同步
+    // 刪除後，如果該行程原本有選車且已填里程，則更新車輛總表
     if (data && data.vehicleId && data.vehicleId !== 'none') {
       await storage.syncVehicleMileage(data.vehicleId);
     }
@@ -102,7 +105,7 @@ export const storage = {
   ) => {
     const tripMileage = endKm - startKm;
 
-    // A. 更新行程紀錄：填入填報數據
+    // A. 更新行程紀錄
     const scheduleRef = doc(db, "schedules", scheduleId);
     await updateDoc(scheduleRef, {
       startKm,
@@ -113,7 +116,7 @@ export const storage = {
       mileageCompleted: true
     });
 
-    // B. 觸發重新加總，更新車輛總表數據
+    // B. 重新計算並同步該車總里程數
     await storage.syncVehicleMileage(vehicleId);
   },
 
@@ -130,14 +133,14 @@ export const storage = {
   }
 }; // storage 物件結束
 
-// --- 6. 衝突檢查邏輯 ---
+// --- 6. 衝突檢查邏輯 (輔助函式，放在物件外) ---
 export const checkCollision = (newData: Partial<Schedule>, allSchedules: Schedule[]): string | null => {
   if (!newData.vehicleId || newData.vehicleId === 'none') return null;
   
   const collision = allSchedules.find(s => {
     if (s.id === newData.id) return false; 
     if (s.date === newData.date && s.vehicleId === newData.vehicleId) {
-      // 時間重疊判定
+      // 判定時間區段是否重疊
       return (newData.startTime! < s.endTime && newData.endTime! > s.startTime);
     }
     return false;
