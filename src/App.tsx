@@ -24,13 +24,15 @@ const App: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | undefined>(undefined);
   
+  // 【新增】手機版選單開關狀態
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   // 頁面視圖狀態
   const [view, setView] = useState<'calendar' | 'user-mgmt' | 'vehicle-mgmt' | 'project-mgmt' | 'stats' | 'mileage-log' | 'profile'>('calendar');
 
   // --- 2. 雲端資料同步邏輯 ---
   const refreshData = async () => {
     try {
-      // 【修正點】加入遺漏的逗號，確保 Promise.all 正常運作
       const [u, s, v, p] = await Promise.all([
         storage.getUsers(),
         storage.getSchedules(),
@@ -62,6 +64,7 @@ const App: React.FC = () => {
     setCurrentUser(null);
     localStorage.removeItem('fleetflow_user');
     setView('calendar');
+    setIsMobileMenuOpen(false);
   };
 
   // --- 4. 行程操作 ---
@@ -80,21 +83,32 @@ const App: React.FC = () => {
     if (window.confirm("確定要刪除此行程嗎？")) {
       try {
         await storage.deleteSchedule(id);
-        await refreshData(); // 刪除後同步重新計算總里程
+        await refreshData(); 
       } catch (error) {
         alert("刪除行程失敗");
       }
     }
   };
 
-  // --- 5. 管理功能：人員、車輛、計畫 ---
+  // --- 5. 管理員金鑰驗證 ---
+  const handleVerifyAdmin = (targetView: string) => {
+    const adminKey = "123456"; 
+    const input = prompt("請輸入管理員金鑰：");
+    if (input === adminKey) {
+      setView(targetView as any); 
+      setIsMobileMenuOpen(false); // 驗證成功後關閉手機選單
+    } else if (input !== null) {
+      alert("金鑰錯誤");
+    }
+  };
+
+  // --- 6. 其他管理邏輯 ---
   const handleAddUser = async (newUser: User) => {
     try {
       await storage.saveUser(newUser);
       await refreshData();
-      alert(`人員 ${newUser.name} 已新增`);
     } catch (error) {
-      alert("新增人員失敗");
+      alert("更新人員失敗");
     }
   };
 
@@ -150,17 +164,6 @@ const App: React.FC = () => {
     }
   };
 
-  // --- 6. 管理員金鑰驗證 ---
-  const handleVerifyAdmin = (targetView: string) => {
-    const adminKey = "123456"; 
-    const input = prompt("請輸入管理員金鑰：");
-    if (input === adminKey) {
-      setView(targetView as any); 
-    } else if (input !== null) {
-      alert("金鑰錯誤");
-    }
-  };
-
   const handleUpdateProfile = async (updatedUser: User) => {
     try {
       await storage.saveUser(updatedUser);
@@ -188,29 +191,35 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
-      {/* 側邊欄 */}
+    <div className="flex h-screen bg-slate-50 overflow-hidden relative">
+      
+      {/* 1. 側邊欄：傳入手機版所需的開關狀態與關閉函式 */}
       <Sidebar 
         onAddSchedule={() => { 
           setEditingSchedule(undefined); 
           setIsFormOpen(true); 
+          setIsMobileMenuOpen(false); // 點擊新增後自動收起手機選單
         }} 
         activeView={view}
-        setView={setView}
-        onVerifyAdmin={handleVerifyAdmin} 
+        setView={(v) => { setView(v); setIsMobileMenuOpen(false); }}
+        onVerifyAdmin={handleVerifyAdmin}
+        isOpen={isMobileMenuOpen}
+        onClose={() => setIsMobileMenuOpen(false)}
       />
       
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* 標題列 */}
+        
+        {/* 2. 標題列：傳入漢堡按鈕的切換函式 */}
         <Header 
           user={currentUser} 
           onLogout={handleLogout} 
-          onOpenProfile={() => setView('profile')} 
+          onOpenProfile={() => { setView('profile'); setIsMobileMenuOpen(false); }} 
+          onToggleMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         />
         
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        <main className="flex-1 overflow-y-auto p-3 md:p-6">
           <div className="max-w-6xl mx-auto">
-            {/* 視圖切換 */}
+            
             {view === 'calendar' && (
               <CalendarView 
                 schedules={schedules} 
@@ -273,7 +282,7 @@ const App: React.FC = () => {
         </main>
       </div>
 
-      {/* 彈出表單 (Modal) */}
+      {/* 3. 彈出表單 (Modal) */}
       {isFormOpen && (
         <ScheduleForm
           onClose={() => setIsFormOpen(false)}
