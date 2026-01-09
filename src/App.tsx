@@ -258,10 +258,12 @@ const App: React.FC = () => {
             )}
 
             {view === 'stats' && (
-              <div className="bg-white p-10 rounded-2xl border text-center">
-                <i className="fas fa-chart-bar text-4xl text-slate-200 mb-4"></i>
-                <h3 className="text-xl font-bold text-slate-400">統計資料功能開發中...</h3>
-              </div>
+              <StatsView 
+                schedules={schedules} 
+                vehicles={vehicles}
+                users={users}
+                projects={projects}
+              />
             )}
 
             {view === 'mileage-log' && (
