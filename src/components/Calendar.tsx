@@ -16,7 +16,7 @@ const CalendarView: React.FC<CalendarProps> = ({ schedules, onEdit, onDelete, cu
   const month = currentMonth.getMonth();
   const monthName = currentMonth.toLocaleString('zh-TW', { month: 'long' });
 
-  // --- 1. 日曆導覽邏輯 (完整保留) ---
+  // --- 1. 日曆導覽邏輯 ---
   const daysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
   const totalDays = daysInMonth(year, month);
   
@@ -37,7 +37,7 @@ const CalendarView: React.FC<CalendarProps> = ({ schedules, onEdit, onDelete, cu
     return today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
   };
 
-  // --- 2. 資訊處理邏輯 (完整保留) ---
+  // --- 2. 資訊處理邏輯 ---
   const extractPlate = (name?: string) => {
     if (!name) return "";
     const match = name.match(/\((.*?)\)/);
@@ -55,10 +55,11 @@ const CalendarView: React.FC<CalendarProps> = ({ schedules, onEdit, onDelete, cu
   const weatherReport = "台北 ☀️ 24°C | 新北 ☁️ 23°C | 桃園 🌤️ 22°C | 新竹 🌬️ 21°C | 台中 ☀️ 25°C | 台南 ☀️ 27°C | 高雄 ☀️ 28°C | 基隆 🌧️ 19°C | 宜蘭 🌧️ 20°C | 花蓮 🌤️ 21°C | 台東 ☀️ 24°C";
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full max-h-[calc(100vh-160px)]">
+    /* 修正點：移除容器的 max-h 限制，改由內部列表控制，並確保 overflow 處理正確 */
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col h-full overflow-hidden">
       
-      {/* 4. 天氣跑馬燈 (頂部顯示) */}
-      <div className="bg-slate-900 text-white py-2 px-4 overflow-hidden relative border-b border-slate-800">
+      {/* 4. 天氣跑馬燈：確保它在最頂部，並移除可能導致切除的 margin */}
+      <div className="bg-slate-900 text-white py-2.5 px-4 overflow-hidden relative shrink-0">
         <div className="whitespace-nowrap inline-block animate-marquee text-xs font-medium">
           <span className="mx-4"><i className="fas fa-bullhorn mr-2 text-indigo-400"></i>今日全台氣象預報：{weatherReport}</span>
           <span className="mx-4"><i className="fas fa-bullhorn mr-2 text-indigo-400"></i>今日全台氣象預報：{weatherReport}</span>
@@ -77,8 +78,8 @@ const CalendarView: React.FC<CalendarProps> = ({ schedules, onEdit, onDelete, cu
         }
       `}} />
 
-      {/* 5. 標題與月份控制列 (完整保留樣式) */}
-      <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white sticky top-0 z-10">
+      {/* 5. 標題與月份控制列：移除 sticky top-0 以免擋到跑馬燈，改用 flex 佈局固定 */}
+      <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white shrink-0">
         <h3 className="text-lg font-bold text-slate-800 flex items-center">
           <i className="fas fa-calendar-alt text-indigo-500 mr-2"></i>
           {year}年 {monthName}
@@ -93,8 +94,12 @@ const CalendarView: React.FC<CalendarProps> = ({ schedules, onEdit, onDelete, cu
         </div>
       </div>
 
-      {/* 6. 逐日列表區塊 */}
-      <div ref={listRef} className="flex-1 overflow-y-auto divide-y divide-slate-100">
+      {/* 6. 逐日列表區塊：修正高度計算，讓捲軸只出現在這裡 */}
+      <div 
+        ref={listRef} 
+        className="flex-1 overflow-y-auto divide-y divide-slate-100"
+        style={{ maxHeight: 'calc(100vh - 280px)' }} 
+      >
         {days.map(day => {
           const daySchedules = getSchedulesForDay(day);
           const activeToday = isToday(day);
@@ -102,7 +107,6 @@ const CalendarView: React.FC<CalendarProps> = ({ schedules, onEdit, onDelete, cu
           return (
             <div key={day} className={`flex flex-col md:flex-row p-3 transition hover:bg-slate-50/50 ${activeToday ? 'bg-indigo-50/30' : ''}`}>
               
-              {/* 日期側欄 (已移除單日天氣圖示) */}
               <div className="flex md:flex-col items-center md:items-start md:w-20 mb-2 md:mb-0 shrink-0">
                 <div className="flex items-center space-x-2 md:space-x-0 md:flex-col">
                   <div className={`text-xl font-bold ${activeToday ? 'text-indigo-600' : 'text-slate-700'}`}>
@@ -114,7 +118,6 @@ const CalendarView: React.FC<CalendarProps> = ({ schedules, onEdit, onDelete, cu
                 </div>
               </div>
 
-              {/* 行程列表區 (單行重構完整保留) */}
               <div className="flex-1 space-y-1 overflow-hidden">
                 {daySchedules.length > 0 ? (
                   daySchedules.map(s => (
@@ -122,16 +125,11 @@ const CalendarView: React.FC<CalendarProps> = ({ schedules, onEdit, onDelete, cu
                       key={s.id}
                       className="group flex flex-row items-center justify-between p-2 bg-white border border-slate-100 rounded-lg hover:border-indigo-200 hover:shadow-sm transition text-[13px] whitespace-nowrap overflow-hidden"
                     >
-                      {/* 左側資訊區：單行排列 */}
                       <div className="flex items-center space-x-3 flex-1 min-w-0 overflow-hidden">
-                        
-                        {/* 時間 */}
                         <div className="text-indigo-600 font-bold w-24 shrink-0">
                           <i className="far fa-clock mr-1 text-[10px]"></i>
                           {s.startTime} - {s.endTime}
                         </div>
-
-                        {/* 類別標籤 */}
                         <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0 ${
                           s.category === '會議' ? 'bg-blue-100 text-blue-600' :
                           s.category === '外勤' ? 'bg-green-100 text-green-600' :
@@ -139,20 +137,14 @@ const CalendarView: React.FC<CalendarProps> = ({ schedules, onEdit, onDelete, cu
                         }`}>
                           {s.category || '其他'}
                         </span>
-
-                        {/* 人員 (加粗) */}
                         <div className="font-bold text-slate-800 w-20 shrink-0 truncate">
                           {s.userName}
                         </div>
-
-                        {/* 事由與地點：單行顯示並自動截斷 */}
                         <div className="text-slate-500 truncate flex-1 min-w-0" title={`${s.destination}: ${s.purpose}`}>
                           <span className="text-slate-700 font-medium">{s.destination}</span>
                           <span className="mx-1 opacity-50">|</span>
                           <span>{s.purpose || '無填寫事由'}</span>
                         </div>
-
-                        {/* 車牌 */}
                         {s.vehicleId && (
                           <div className="flex items-center bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md border border-amber-100 font-mono text-[11px] shrink-0">
                             <i className="fas fa-car mr-1.5 text-[10px]"></i>
@@ -161,24 +153,11 @@ const CalendarView: React.FC<CalendarProps> = ({ schedules, onEdit, onDelete, cu
                         )}
                       </div>
 
-                      {/* 右側操作區：權限判斷與刪除功能 (完整保留) */}
                       <div className="flex items-center space-x-1 ml-4 shrink-0 opacity-0 group-hover:opacity-100 transition">
                         {(s.userId === currentUser.id || currentUser.role === UserRole.ADMIN) && (
                           <>
-                            <button 
-                              onClick={() => onEdit(s)}
-                              className="p-1.5 text-slate-400 hover:text-indigo-600 transition"
-                              title="編輯行程"
-                            >
-                              <i className="fas fa-edit text-xs"></i>
-                            </button>
-                            <button 
-                              onClick={() => { if(window.confirm('確定要刪除此行程？')) onDelete(s.id); }}
-                              className="p-1.5 text-slate-400 hover:text-red-500 transition"
-                              title="刪除行程"
-                            >
-                              <i className="fas fa-trash-alt text-xs"></i>
-                            </button>
+                            <button onClick={() => onEdit(s)} className="p-1.5 text-slate-400 hover:text-indigo-600 transition"><i className="fas fa-edit text-xs"></i></button>
+                            <button onClick={() => { if(window.confirm('確定要刪除此行程？')) onDelete(s.id); }} className="p-1.5 text-slate-400 hover:text-red-500 transition"><i className="fas fa-trash-alt text-xs"></i></button>
                           </>
                         )}
                       </div>
