@@ -1,306 +1,307 @@
-import React, { useState, useEffect } from 'react';
-import { Vehicle, Schedule, User, Project, ScheduleCategory } from '../types';
-import { checkCollision } from '../services/storage';
+import React, { useState } from 'react';
+import { Vehicle, Schedule, User } from '../types';
+import { storage } from '../services/storage';
 
-interface ScheduleFormProps {
-  onClose: () => void;
-  onSave: (schedule: Schedule) => void;
+interface Props {
   vehicles: Vehicle[];
   schedules: Schedule[];
   users: User[];
-  projects: Project[];
-  currentUser: User;
-  initialData?: Schedule;
+  onSave: (v: Vehicle) => void;
+  onDelete: (id: string) => void;
+  onRefresh: () => void;
 }
 
-const ScheduleForm: React.FC<ScheduleFormProps> = ({ 
-  onClose, 
-  onSave, 
-  vehicles, 
-  schedules, 
-  users,
-  projects,
-  currentUser, 
-  initialData 
-}) => {
-  // 1. 初始化表單資料
-  const [formData, setFormData] = useState<Partial<Schedule>>({
-    date: new Date().toISOString().split('T')[0],
-    startTime: '09:00',
-    endTime: '11:00',
-    purpose: '',
-    category: '外勤',
-    projectName: '',
-    accompanimentIds: [],
-    vehicleId: 'none' 
+const VehicleManagement: React.FC<Props> = ({ vehicles, schedules, users, onSave, onDelete, onRefresh }) => {
+  const [formData, setFormData] = useState<Partial<Vehicle>>({ 
+    name: '', plateNumber: '', type: '', status: 'available', totalMileage: 0 
   });
-  
-  const [error, setError] = useState<string | null>(null);
+  const [selectedVehId, setSelectedVehId] = useState<string | null>(null);
+  const [editingRecord, setEditingRecord] = useState<Schedule | null>(null);
 
-  // 載入編輯資料或預設值
-  useEffect(() => {
-    if (initialData) {
-      setFormData({
-        ...initialData,
-        vehicleId: initialData.vehicleId || 'none',
-        accompanimentIds: initialData.accompanimentIds || []
-      });
-    } else {
-      if (projects.length > 0) {
-        setFormData(prev => ({ ...prev, projectName: projects[0].name }));
-      }
-    }
-  }, [initialData, projects]);
-
-  // 同行人員：下拉選單選中邏輯
-  const handleSelectAccompaniment = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const userId = e.target.value;
-    if (!userId) return;
-    
-    const currentIds = formData.accompanimentIds || [];
-    if (!currentIds.includes(userId)) {
-      setFormData({ ...formData, accompanimentIds: [...currentIds, userId] });
-    }
-    e.target.value = ""; // 重置選單
-  };
-
-  // 同行人員：刪除標籤
-  const removeAccompaniment = (userId: string) => {
-    const currentIds = formData.accompanimentIds || [];
-    setFormData({ ...formData, accompanimentIds: currentIds.filter(id => id !== userId) });
-  };
-
+  // 1. 提交車輛基本資料 (新增/修改)
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
+    onSave({ ...formData, id: formData.id || 'v' + Date.now() } as Vehicle);
+    // 重置表單
+    setFormData({ name: '', plateNumber: '', type: '', status: 'available', totalMileage: 0 });
+  };
 
-    // --- 表單驗證 ---
-    if (formData.startTime! >= formData.endTime!) {
-      setError("結束時間必須晚於開始時間。");
-      return;
-    }
-
-    if (!formData.projectName || formData.projectName === "") {
-      setError("請選擇計畫名稱。");
-      return;
-    }
-
-    // --- 衝突檢查 (只有在真正有選車時才檢查) ---
-    if (formData.vehicleId && formData.vehicleId !== 'none') {
-      const collisionMsg = checkCollision(formData, schedules);
-      if (collisionMsg) {
-        setError(collisionMsg);
-        return;
-      }
-    }
-
-    const selectedVehicle = vehicles.find(v => v.id === formData.vehicleId);
+  // 2. 統計邏輯：計算加油紀錄
+  const getGasStats = (vId: string) => {
+    const history = schedules
+      .filter(s => String(s.vehicleId) === String(vId) && s.mileageCompleted)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
     
-    // --- 組裝最終資料 (關鍵修正：vehicleId 的處理) ---
-    const finalData: Schedule = {
-      id: initialData?.id || 's' + Date.now(),
-      userId: initialData?.userId || currentUser.id, 
-      userName: initialData?.userName || currentUser.name,
-      date: formData.date!,
-      startTime: formData.startTime!,
-      endTime: formData.endTime!,
-      purpose: formData.purpose || "未填寫事由",
-      category: (formData.category as ScheduleCategory) || '其他',
-      projectName: formData.projectName!,
-      accompanimentIds: formData.accompanimentIds || [],
-      // 如果選擇 'none'，則儲存為 null，避免資料庫錯誤
-      vehicleId: formData.vehicleId === 'none' ? null : formData.vehicleId!,
-      vehicleName: selectedVehicle ? `${selectedVehicle.name} (${selectedVehicle.plateNumber})` : ""
-    };
+    const gasRecords = history.filter(h => h.isRefueled);
+    
+    if (gasRecords.length < 2) return "⛽ 加油數據不足 (需至少兩次紀錄)";
+    
+    const lastIdx = gasRecords.length - 1;
+    const prevIdx = gasRecords.length - 2;
+    // 計算間距：最後一次加油里程 - 倒數第二次加油里程
+    const lastInterval = (gasRecords[lastIdx].endKm || 0) - (gasRecords[prevIdx].endKm || 0);
+    
+    // 計算平均：(最後一次里程 - 第一次里程) / (加油次數 - 1)
+    const totalDistCovered = (gasRecords[lastIdx].endKm || 0) - (gasRecords[0].endKm || 0);
+    const avg = Math.round(totalDistCovered / (gasRecords.length - 1));
 
-    console.log("提交行程資料:", finalData);
-    onSave(finalData);
+    return `平均每 ${avg}km 加油 | 距上次加油行駛了 ${lastInterval}km`;
+  };
+
+  // 3. 輔助：解析同行人員姓名標籤
+  const getCompanionNames = (ids?: string[]) => {
+    if (!ids || ids.length === 0) return <span className="text-slate-300">-</span>;
+    const names = ids.map(id => users.find(u => u.id === id)?.name).filter(Boolean);
+    return (
+      <div className="flex flex-wrap gap-1">
+        {names.map((name, i) => (
+          <span key={i} className="bg-pink-50 text-pink-600 px-1.5 py-0.5 rounded text-[10px] font-bold border border-pink-100">
+            {name}
+          </span>
+        ))}
+      </div>
+    );
+  };
+
+  // 4. 儲存後台修正的出勤紀錄
+  const handleSaveHistoryRecord = async () => {
+    if (!editingRecord) return;
+    try {
+      // 呼叫 storage.saveSchedule，它會自動觸發 syncVehicleMileage 重新計算總里程
+      await storage.saveSchedule(editingRecord);
+      alert("歷史紀錄已修正！總行駛里程數已同步更新。");
+      setEditingRecord(null);
+      onRefresh(); // 刷新資料，更新上方總表
+    } catch (e) {
+      alert("修正失敗");
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-lg overflow-hidden animate-in fade-in zoom-in duration-200" style={{maxWidth: '500px'}}>
-        
-        {/* 標題列 */}
-        <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-black">
-            {initialData ? '修改外差行程' : '新增外差行程'}
-          </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition">
-            <i className="fas fa-times text-xl"></i>
-          </button>
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 animate-in fade-in duration-500">
+      <h3 className="text-xl font-bold mb-6 text-black flex items-center">
+        <i className="fas fa-truck mr-2 text-indigo-500"></i>
+        車輛管理
+      </h3>
+      
+      {/* 車輛編輯與新增區 */}
+      <form onSubmit={handleSubmit} className="mb-8 p-5 bg-slate-50 rounded-2xl border border-slate-100 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <div>
+          <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
+            <i className="fas fa-car mr-1 text-blue-500"></i> 車名/型號
+          </label>
+          <input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full border p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-white" required />
         </div>
+        <div>
+          <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
+            <i className="fas fa-id-card mr-1 text-emerald-500"></i> 車牌號碼
+          </label>
+          <input value={formData.plateNumber} onChange={e => setFormData({...formData, plateNumber: e.target.value})} className="w-full border p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-white" required />
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
+            <i className="fas fa-toggle-on mr-1 text-orange-500"></i> 狀態
+          </label>
+          <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+            <option value="available">可預約 (Available)</option>
+            <option value="maintenance">維修中 (Maintenance)</option>
+          </select>
+        </div>
+        <button type="submit" className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-md hover:bg-indigo-700 transition active:scale-95">
+          儲存車輛資料
+        </button>
+      </form>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-          
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-xs flex items-start space-x-2">
-              <i className="fas fa-exclamation-triangle mt-0.5"></i>
-              <span>{error}</span>
-            </div>
-          )}
+      {/* 車輛主列表 */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead className="text-slate-400 border-b">
+            <tr>
+              <th className="py-3 px-2">車名/型號</th>
+              <th>車牌</th>
+              <th>總行駛里程數</th>
+              <th>狀態</th>
+              <th className="text-right px-2">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {vehicles.map(v => {
+              // 篩選該車的出勤歷史
+              const carHistory = schedules.filter(s => String(s.vehicleId) === String(v.id) && s.mileageCompleted);
+              const isOpen = selectedVehId === v.id;
 
-          {/* 第一列：姓名與類別 (彩色圖示) */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
-                <i className="fas fa-user-circle mr-1 text-blue-500"></i> 同仁姓名
-              </label>
-              <input 
-                type="text" value={currentUser.name} disabled
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-500 outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
-                <i className="fas fa-tags mr-1 text-orange-500"></i> 類別
-              </label>
-              <select 
-                value={formData.category}
-                onChange={e => setFormData({...formData, category: e.target.value as any})}
-                className="w-full border border-slate-200 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
-              >
-                <option value="會議">會議</option>
-                <option value="外勤">外勤</option>
-                <option value="休假">休假</option>
-                <option value="其他">其他</option>
-              </select>
-            </div>
-          </div>
+              return (
+                <React.Fragment key={v.id}>
+                  {/* 主列：點擊展開 */}
+                  <tr 
+                    className={`border-b hover:bg-slate-50 cursor-pointer transition-all ${isOpen ? 'bg-indigo-50/50' : ''}`}
+                    onClick={() => setSelectedVehId(isOpen ? null : v.id)}
+                  >
+                    <td className="py-4 px-2 font-bold text-slate-700">
+                      <i className={`fas fa-caret-${isOpen ? 'down' : 'right'} mr-2 text-indigo-500 w-4`}></i>
+                      {v.name}
+                    </td>
+                    <td className="font-mono text-slate-500">{v.plateNumber}</td>
+                    <td className="font-bold text-slate-900">{v.totalMileage || 0} km</td>
+                    <td>
+                      <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${v.status === 'available' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                        {v.status === 'available' ? '可預約' : '維修中'}
+                      </span>
+                    </td>
+                    <td className="text-right px-2" onClick={e => e.stopPropagation()}>
+                      <button onClick={() => setFormData(v)} className="text-indigo-400 hover:text-indigo-600 p-2" title="編輯車輛"><i className="fas fa-edit"></i></button>
+                      <button onClick={() => onDelete(v.id)} className="text-slate-300 hover:text-red-500 p-2" title="刪除車輛"><i className="fas fa-trash-alt"></i></button>
+                    </td>
+                  </tr>
 
-          {/* 第二列：計畫名稱 (彩色圖示) */}
-          <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
-              <i className="fas fa-folder-open mr-1 text-emerald-500"></i> 計畫名稱
-            </label>
-            <select 
-              value={formData.projectName}
-              onChange={e => setFormData({...formData, projectName: e.target.value})}
-              className="w-full border border-slate-200 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
-              required
-            >
-              <option value="">請選擇計畫名稱...</option>
-              {projects.map(p => (
-                <option key={p.id} value={p.name}>{p.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* 第三列：日期 (彩色圖示) */}
-          <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
-              <i className="fas fa-calendar-alt mr-1 text-red-500"></i> 出差日期
-            </label>
-            <input 
-              type="date" required value={formData.date}
-              onChange={e => setFormData({...formData, date: e.target.value})}
-              className="w-full border border-slate-200 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-            />
-          </div>
-
-          {/* 第四列：時間 (彩色圖示) */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
-                <i className="fas fa-clock mr-1 text-violet-500"></i> 開始時間
-              </label>
-              <input 
-                type="time" required value={formData.startTime}
-                onChange={e => setFormData({...formData, startTime: e.target.value})}
-                className="w-full border border-slate-200 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
-                <i className="fas fa-hourglass-end mr-1 text-violet-500"></i> 結束時間
-              </label>
-              <input 
-                type="time" required value={formData.endTime}
-                onChange={e => setFormData({...formData, endTime: e.target.value})}
-                className="w-full border border-slate-200 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-              />
-            </div>
-          </div>
-
-          {/* 第五列：預約車輛 (彩色圖示) */}
-          <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
-              <i className="fas fa-car mr-1 text-indigo-500"></i> 預約車輛
-            </label>
-            <select 
-              value={formData.vehicleId || 'none'}
-              onChange={e => setFormData({...formData, vehicleId: e.target.value})}
-              className="w-full border border-slate-200 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
-            >
-              <option value="none">不須用車 / 自行前往</option>
-              {vehicles.map(v => {
-                const isMaintenance = v.status === 'maintenance';
-                const isBooked = schedules.some(s => 
-                  s.id !== initialData?.id && 
-                  s.date === formData.date &&
-                  s.vehicleId === v.id &&
-                  (formData.startTime! < s.endTime && formData.endTime! > s.startTime)
-                );
-                const isDisabled = isMaintenance || isBooked;
-                return (
-                  <option key={v.id} value={v.id} disabled={isDisabled}>
-                    {v.name} ({v.plateNumber}) {isMaintenance ? ' [維修中]' : isBooked ? ' [已被預約]' : ''}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
-
-          {/* 第六列：同行人員 (彩色圖示) */}
-          <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
-              <i className="fas fa-user-friends mr-1 text-pink-500"></i> 同行人員 (選填)
-            </label>
-            <select 
-              onChange={handleSelectAccompaniment}
-              defaultValue=""
-              className="w-full border border-slate-200 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white mb-2"
-            >
-              <option value="" disabled>點擊選擇人員...</option>
-              {users.filter(u => u.id !== currentUser.id).map(u => (
-                <option key={u.id} value={u.id}>{u.name}</option>
-              ))}
-            </select>
-            <div className="flex flex-wrap gap-2 min-h-[32px]">
-              {formData.accompanimentIds?.map(id => {
-                const user = users.find(u => u.id === id);
-                return (
-                  <span key={id} className="inline-flex items-center bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold border border-indigo-100">
-                    {user?.name}
-                    <button type="button" onClick={() => removeAccompaniment(id)} className="ml-1.5 hover:text-red-500 transition">
-                      <i className="fas fa-times-circle"></i>
-                    </button>
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 第七列：事由 (彩色圖示) */}
-          <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
-              <i className="fas fa-pen-fancy mr-1 text-sky-500"></i> 事由與目的地
-            </label>
-            <textarea 
-              rows={2} required placeholder="請輸入出差事由與所在地點"
-              value={formData.purpose} onChange={e => setFormData({...formData, purpose: e.target.value})}
-              className="w-full border border-slate-200 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
-            ></textarea>
-          </div>
-
-          <div className="pt-2 flex space-x-3">
-            <button type="button" onClick={onClose} className="flex-1 px-6 py-2.5 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition text-sm">取消</button>
-            <button type="submit" className="flex-1 px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition shadow-lg text-sm">儲存行程</button>
-          </div>
-        </form>
+                  {/* 下拉詳情：出勤紀錄清單 */}
+                  {isOpen && (
+                    <tr>
+                      <td colSpan={5} className="p-0 border-b border-indigo-100">
+                        <div className="bg-slate-50 p-5 animate-in slide-in-from-top-2 duration-300">
+                          <div className="bg-white rounded-xl border border-indigo-100 p-5 shadow-sm">
+                            
+                            {/* 詳情標題與統計 */}
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3">
+                              <h4 className="font-bold text-black flex items-center">
+                                <i className="fas fa-history mr-2 text-indigo-500"></i> 出勤紀錄與統計數據
+                              </h4>
+                              <div className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-100 px-4 py-2 rounded-lg">
+                                <i className="fas fa-gas-pump mr-2"></i> {getGasStats(v.id)}
+                              </div>
+                            </div>
+                            
+                            {/* 出勤清單表格 */}
+                            <div className="overflow-x-auto rounded-lg border border-slate-100">
+                              <table className="w-full text-xs text-left">
+                                <thead className="bg-slate-100 text-slate-500 font-bold uppercase tracking-wider">
+                                  <tr>
+                                    <th className="p-3">日期</th>
+                                    <th>人員</th>
+                                    <th>同行人員</th>
+                                    <th>出發/結束里程</th>
+                                    <th>單次里程</th>
+                                    <th className="text-center">加油</th>
+                                    <th className="text-center">洗車</th>
+                                    <th className="text-right p-3">操作</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-50">
+                                  {carHistory
+                                    .sort((a,b) => b.date.localeCompare(a.date))
+                                    .map(h => (
+                                    <tr key={h.id} className="hover:bg-slate-50">
+                                      <td className="p-3 font-medium text-slate-600">{h.date}</td>
+                                      <td className="font-bold text-slate-700">{h.userName}</td>
+                                      <td>{getCompanionNames(h.accompanimentIds)}</td>
+                                      <td className="font-mono text-slate-400">
+                                        <span className="text-blue-500">{h.startKm}</span> → <span className="text-red-500">{h.endKm}</span>
+                                      </td>
+                                      <td className="font-bold text-indigo-600">{h.tripMileage || 0} km</td>
+                                      <td className="text-center">
+                                        {h.isRefueled ? <i className="fas fa-gas-pump text-orange-500"></i> : <span className="text-slate-200">-</span>}
+                                      </td>
+                                      <td className="text-center">
+                                        {h.isWashed ? <i className="fas fa-soap text-sky-500"></i> : <span className="text-slate-200">-</span>}
+                                      </td>
+                                      <td className="text-right p-3">
+                                        <button 
+                                          onClick={() => setEditingRecord(h)} 
+                                          className="text-slate-300 hover:text-indigo-600 transition"
+                                          title="後台修正紀錄"
+                                        >
+                                          <i className="fas fa-pen text-[10px]"></i>
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                  {carHistory.length === 0 && (
+                                    <tr>
+                                      <td colSpan={8} className="p-12 text-center text-slate-400 italic">
+                                        目前尚無此車輛的里程填報歷史
+                                      </td>
+                                    </tr>
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
+
+      {/* 後台紀錄編輯視窗 (彩色小圖案) */}
+      {editingRecord && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in zoom-in duration-200">
+            <h4 className="text-lg font-bold mb-5 flex items-center text-black">
+              <i className="fas fa-edit mr-2 text-indigo-500"></i> 修正歷史出勤里程
+            </h4>
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 mb-1">
+                    <i className="fas fa-play text-blue-500 mr-1"></i> 出發里程
+                  </label>
+                  <input 
+                    type="number" 
+                    value={editingRecord.startKm || 0} 
+                    onChange={e => setEditingRecord({...editingRecord, startKm: parseInt(e.target.value) || 0})}
+                    className="w-full border rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 mb-1">
+                    <i className="fas fa-stop text-red-500 mr-1"></i> 結束里程
+                  </label>
+                  <input 
+                    type="number" 
+                    value={editingRecord.endKm || 0} 
+                    onChange={e => {
+                      const end = parseInt(e.target.value) || 0;
+                      setEditingRecord({
+                        ...editingRecord, 
+                        endKm: end, 
+                        tripMileage: end - (editingRecord.startKm || 0)
+                      });
+                    }}
+                    className="w-full border rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex space-x-6 py-2 px-1 border-y border-slate-50">
+                <label className="flex items-center space-x-2 cursor-pointer group">
+                  <input type="checkbox" className="w-4 h-4 text-orange-500 rounded" checked={editingRecord.isRefueled || false} onChange={e => setEditingRecord({...editingRecord, isRefueled: e.target.checked})} />
+                  <span className="text-xs font-bold text-slate-600 group-hover:text-orange-500">
+                    <i className="fas fa-gas-pump mr-1"></i> 加油
+                  </span>
+                </label>
+                <label className="flex items-center space-x-2 cursor-pointer group">
+                  <input type="checkbox" className="w-4 h-4 text-sky-500 rounded" checked={editingRecord.isWashed || false} onChange={e => setEditingRecord({...editingRecord, isWashed: e.target.checked})} />
+                  <span className="text-xs font-bold text-slate-600 group-hover:text-sky-500">
+                    <i className="fas fa-soap mr-1"></i> 洗車
+                  </span>
+                </label>
+              </div>
+
+              <div className="flex space-x-3 pt-2">
+                <button onClick={() => setEditingRecord(null)} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-500 hover:bg-slate-50 transition">取消</button>
+                <button onClick={handleSaveHistoryRecord} className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-100 active:scale-95 transition">儲存修正</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-export default ScheduleForm;
+export default VehicleManagement;
