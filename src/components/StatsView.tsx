@@ -108,8 +108,8 @@ const StatsView: React.FC<StatsViewProps> = ({ schedules = [], vehicles = [], us
         <h3 className="text-lg font-bold text-black flex items-center"><i className="fas fa-search-chart mr-2 text-indigo-500"></i> 統計報表查詢範圍</h3>
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex bg-slate-100 p-1 rounded-xl">
-            <button onClick={() => setFilterType('month')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${filterType === 'month' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>按月分</button>
-            <button onClick={() => setFilterType('range')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${filterType === 'range' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>自訂範圍</button>
+            <button onClick={() => setFilterType('month')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${filterType === 'month' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-50'}`}>按月分</button>
+            <button onClick={() => setFilterType('range')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${filterType === 'range' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-50'}`}>自訂範圍</button>
           </div>
           {filterType === 'month' ? <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="border rounded-xl p-2 text-sm outline-none" /> : 
           <div className="flex items-center space-x-2"><input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border rounded-xl p-2 text-sm" /><span>~</span><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="border rounded-xl p-2 text-sm" /></div>}
@@ -135,7 +135,7 @@ const StatsView: React.FC<StatsViewProps> = ({ schedules = [], vehicles = [], us
         </div>
       </div>
 
-      {/* 3. 第二部分：車輛行駛統計清單 */}
+      {/* 3. 第二部分：車輛行駛統計清單 (新增車牌欄位) */}
       <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <h4 className="font-bold text-black flex items-center">
@@ -146,7 +146,8 @@ const StatsView: React.FC<StatsViewProps> = ({ schedules = [], vehicles = [], us
           <table className="w-full text-sm text-left">
             <thead className="text-slate-400 bg-slate-50/30 uppercase text-[10px] font-bold">
               <tr>
-                <th className="p-4">車名 / 車牌</th>
+                <th className="p-4">車名</th>
+                <th>車牌</th>
                 <th>行駛天數</th>
                 <th>總趟數</th>
                 <th>累積時數</th>
@@ -161,10 +162,8 @@ const StatsView: React.FC<StatsViewProps> = ({ schedules = [], vehicles = [], us
                 const km = vSchedules.reduce((acc, s) => acc + (s.tripMileage || 0), 0);
                 return (
                   <tr key={v.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-4">
-                      <div className="font-bold text-slate-800">{v.name}</div>
-                      <div className="text-[10px] font-mono text-slate-400">{v.plateNumber}</div>
-                    </td>
+                    <td className="p-4 font-bold text-slate-800">{v.name}</td>
+                    <td className="font-mono text-slate-500">{v.plateNumber}</td>
                     <td>{days} 天</td>
                     <td>{vSchedules.length} 趟</td>
                     <td>{hours.toFixed(1)} hr</td>
@@ -215,7 +214,7 @@ const StatsView: React.FC<StatsViewProps> = ({ schedules = [], vehicles = [], us
         </div>
       </div>
 
-      {/* 5. 第四部分：計畫執行深度統計 (已移至最下方) */}
+      {/* 5. 第四部分：計畫執行深度統計 */}
       <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="flex-1">
@@ -225,7 +224,6 @@ const StatsView: React.FC<StatsViewProps> = ({ schedules = [], vehicles = [], us
             <p className="text-xs text-slate-400 mt-1 font-bold">計畫外勤占比與人員貢獻度分析</p>
           </div>
 
-          {/* 計畫總占比圖 */}
           <div className="bg-white px-5 py-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center">
             <p className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-tighter">各計畫外勤人次總占比</p>
             <PieChart data={projectGlobalShare} colors={chartColors} />
