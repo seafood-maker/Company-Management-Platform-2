@@ -4,8 +4,8 @@ import { storage } from '../services/storage';
 
 interface Props {
   vehicles: Vehicle[];
-  schedules: Schedule[]; // 必須傳入行程資料
-  users: User[];         // 為了顯示同行人員姓名
+  schedules: Schedule[];
+  users: User[];
   onSave: (v: Vehicle) => void;
   onDelete: (id: string) => void;
   onRefresh: () => void;
@@ -13,7 +13,7 @@ interface Props {
 
 const VehicleManagement: React.FC<Props> = ({ vehicles, schedules, users, onSave, onDelete, onRefresh }) => {
   const [formData, setFormData] = useState<Partial<Vehicle>>({ 
-    name: '', plateNumber: '', type: '', status: 'available', totalMileage: 0 
+    name: '', plateNumber: '', type: '', status: 'available', totalMileage: 0, initialMileage: 0 
   });
   const [selectedVehId, setSelectedVehId] = useState<string | null>(null);
   const [editingRecord, setEditingRecord] = useState<Schedule | null>(null);
@@ -21,8 +21,17 @@ const VehicleManagement: React.FC<Props> = ({ vehicles, schedules, users, onSave
   // 1. 提交車輛基本資料 (新增/修改)
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({ ...formData, id: formData.id || 'v' + Date.now() } as Vehicle);
-    setFormData({ name: '', plateNumber: '', type: '', status: 'available', totalMileage: 0 });
+    // 確保 initialMileage 是數字型態
+    const vehicleToSave = { 
+      ...formData, 
+      id: formData.id || 'v' + Date.now(),
+      initialMileage: Number(formData.initialMileage) || 0 
+    } as Vehicle;
+    
+    onSave(vehicleToSave);
+    
+    // 重置表單
+    setFormData({ name: '', plateNumber: '', type: '', status: 'available', totalMileage: 0, initialMileage: 0 });
   };
 
   // 2. 統計邏輯：計算加油紀錄
@@ -33,7 +42,7 @@ const VehicleManagement: React.FC<Props> = ({ vehicles, schedules, users, onSave
     
     const gasRecords = history.filter(h => h.isRefueled);
     
-    if (gasRecords.length < 2) return "⛽ 加油數據不足 (需兩次紀錄)";
+    if (gasRecords.length < 2) return "⛽ 加油數據不足 (需至少兩次紀錄)";
     
     const lastIdx = gasRecords.length - 1;
     const prevIdx = gasRecords.length - 2;
@@ -80,8 +89,8 @@ const VehicleManagement: React.FC<Props> = ({ vehicles, schedules, users, onSave
         車輛管理
       </h3>
       
-      {/* 編輯表單 (手機版自動排列) */}
-      <form onSubmit={handleSubmit} className="mb-8 p-4 md:p-5 bg-slate-50 rounded-2xl border border-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+      {/* 新增/編輯表單 (整合初始里程欄位) */}
+      <form onSubmit={handleSubmit} className="mb-8 p-4 md:p-5 bg-slate-50 rounded-2xl border border-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
         <div>
           <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
             <i className="fas fa-car mr-1 text-blue-500"></i> 車名/型號
@@ -94,9 +103,24 @@ const VehicleManagement: React.FC<Props> = ({ vehicles, schedules, users, onSave
           </label>
           <input value={formData.plateNumber} onChange={e => setFormData({...formData, plateNumber: e.target.value})} className="w-full border p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-white" required />
         </div>
+        
+        {/* 新增：初始里程輸入框 */}
         <div>
           <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
-            <i className="fas fa-toggle-on mr-1 text-orange-500"></i> 狀態
+            <i className="fas fa-tachometer-alt mr-1 text-orange-500"></i> 初始里程 (km)
+          </label>
+          <input 
+            type="number" 
+            value={formData.initialMileage || 0} 
+            onChange={e => setFormData({...formData, initialMileage: parseInt(e.target.value) || 0})} 
+            className="w-full border p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-white" 
+            required 
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
+            <i className="fas fa-toggle-on mr-1 text-purple-500"></i> 狀態
           </label>
           <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
             <option value="available">可預約 (Available)</option>
@@ -108,13 +132,14 @@ const VehicleManagement: React.FC<Props> = ({ vehicles, schedules, users, onSave
         </button>
       </form>
 
-      {/* 車輛列表 (增加橫向捲軸 div) */}
+      {/* 車輛主列表 (增加橫向捲軸 div，解決手機跑版) */}
       <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-        <table className="w-full text-left text-sm min-w-[650px]">
+        <table className="w-full text-left text-sm min-w-[750px]">
           <thead className="text-slate-400 border-b">
             <tr>
               <th className="py-3 px-2">車名/型號</th>
               <th>車牌</th>
+              <th>初始里程</th>
               <th>總行駛里程數</th>
               <th>狀態</th>
               <th className="text-right px-2">操作</th>
@@ -127,16 +152,16 @@ const VehicleManagement: React.FC<Props> = ({ vehicles, schedules, users, onSave
 
               return (
                 <React.Fragment key={v.id}>
-                  {/* 主列 */}
                   <tr 
                     className={`border-b hover:bg-slate-50 cursor-pointer transition-all ${isOpen ? 'bg-indigo-50/50' : ''}`}
                     onClick={() => setSelectedVehId(isOpen ? null : v.id)}
                   >
                     <td className="py-4 px-2 font-bold text-slate-700">
-                      <i className={`fas fa-caret-${isOpen ? 'down' : 'right'} mr-2 text-indigo-500 w-4 transition-transform`}></i>
+                      <i className={`fas fa-caret-${isOpen ? 'down' : 'right'} mr-2 text-indigo-500 w-4`}></i>
                       {v.name}
                     </td>
                     <td className="font-mono text-slate-500">{v.plateNumber}</td>
+                    <td className="text-slate-400">{v.initialMileage || 0} km</td>
                     <td className="font-bold text-slate-900">{v.totalMileage || 0} km</td>
                     <td>
                       <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${v.status === 'available' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
@@ -144,37 +169,35 @@ const VehicleManagement: React.FC<Props> = ({ vehicles, schedules, users, onSave
                       </span>
                     </td>
                     <td className="text-right px-2" onClick={e => e.stopPropagation()}>
-                      <button onClick={() => setFormData(v)} className="text-indigo-400 hover:text-indigo-600 p-2"><i className="fas fa-edit"></i></button>
-                      <button onClick={() => onDelete(v.id)} className="text-slate-300 hover:text-red-500 p-2"><i className="fas fa-trash-alt"></i></button>
+                      <button onClick={() => setFormData(v)} className="text-indigo-400 hover:text-indigo-600 p-2" title="編輯基本資料"><i className="fas fa-edit"></i></button>
+                      <button onClick={() => onDelete(v.id)} className="text-slate-300 hover:text-red-500 p-2" title="刪除車輛"><i className="fas fa-trash-alt"></i></button>
                     </td>
                   </tr>
 
-                  {/* 下拉詳情 */}
+                  {/* 下拉詳情：出勤紀錄清單 */}
                   {isOpen && (
                     <tr>
-                      <td colSpan={5} className="p-0 border-b border-indigo-100">
+                      <td colSpan={6} className="p-0 border-b border-indigo-100">
                         <div className="bg-slate-50 p-2 md:p-5 animate-in slide-in-from-top-2 duration-300">
                           <div className="bg-white rounded-xl border border-indigo-100 p-4 md:p-5 shadow-sm">
                             
-                            {/* 詳情標題與統計 */}
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3">
                               <h4 className="font-bold text-black flex items-center">
                                 <i className="fas fa-history mr-2 text-indigo-500"></i> 出勤紀錄與統計數據
                               </h4>
-                              <div className="text-[11px] md:text-xs font-bold text-amber-700 bg-amber-50 border border-amber-100 px-4 py-2 rounded-lg">
+                              <div className="text-[11px] md:text-xs font-bold text-amber-700 bg-amber-50 border border-amber-100 px-4 py-2 rounded-lg shadow-sm">
                                 <i className="fas fa-gas-pump mr-2"></i> {getGasStats(v.id)}
                               </div>
                             </div>
                             
-                            {/* 歷史清單表格 (內部捲軸) */}
                             <div className="overflow-x-auto rounded-lg border border-slate-100">
                               <table className="w-full text-[11px] md:text-xs text-left min-w-[700px]">
-                                <thead className="bg-slate-100 text-slate-500 font-bold uppercase">
+                                <thead className="bg-slate-100 text-slate-500 font-bold uppercase tracking-wider">
                                   <tr>
                                     <th className="p-3">日期</th>
                                     <th>人員</th>
                                     <th>同行人員</th>
-                                    <th>出發/結束</th>
+                                    <th>出發/結束里程</th>
                                     <th>單次里程</th>
                                     <th className="text-center">加油</th>
                                     <th className="text-center">洗車</th>
@@ -183,7 +206,7 @@ const VehicleManagement: React.FC<Props> = ({ vehicles, schedules, users, onSave
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
                                   {carHistory.sort((a,b) => b.date.localeCompare(a.date)).map(h => (
-                                    <tr key={h.id} className="hover:bg-slate-50">
+                                    <tr key={h.id} className="hover:bg-slate-50 transition-colors">
                                       <td className="p-3 font-medium text-slate-600">{h.date}</td>
                                       <td className="font-bold text-slate-700">{h.userName}</td>
                                       <td>{getCompanionNames(h.accompanimentIds)}</td>
@@ -191,8 +214,8 @@ const VehicleManagement: React.FC<Props> = ({ vehicles, schedules, users, onSave
                                         <span className="text-blue-500">{h.startKm}</span> → <span className="text-red-500">{h.endKm}</span>
                                       </td>
                                       <td className="font-bold text-indigo-600">{h.tripMileage || 0} km</td>
-                                      <td className="text-center">{h.isRefueled ? <i className="fas fa-gas-pump text-orange-500"></i> : '-'}</td>
-                                      <td className="text-center">{h.isWashed ? <i className="fas fa-soap text-sky-500"></i> : '-'}</td>
+                                      <td className="text-center">{h.isRefueled ? <i className="fas fa-gas-pump text-orange-500"></i> : <span className="text-slate-200">-</span>}</td>
+                                      <td className="text-center">{h.isWashed ? <i className="fas fa-soap text-sky-500"></i> : <span className="text-slate-200">-</span>}</td>
                                       <td className="text-right p-3">
                                         <button onClick={() => setEditingRecord(h)} className="text-slate-300 hover:text-indigo-600 transition"><i className="fas fa-pen text-[10px]"></i></button>
                                       </td>
@@ -239,7 +262,11 @@ const VehicleManagement: React.FC<Props> = ({ vehicles, schedules, users, onSave
                   </label>
                   <input type="number" value={editingRecord.endKm || 0} onChange={e => {
                     const end = parseInt(e.target.value) || 0;
-                    setEditingRecord({...editingRecord, endKm: end, tripMileage: end - (editingRecord.startKm || 0)});
+                    setEditingRecord({
+                      ...editingRecord, 
+                      endKm: end, 
+                      tripMileage: end - (editingRecord.startKm || 0)
+                    });
                   }} className="w-full border rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
               </div>
@@ -255,7 +282,7 @@ const VehicleManagement: React.FC<Props> = ({ vehicles, schedules, users, onSave
               </div>
               <div className="flex space-x-3 pt-2">
                 <button onClick={() => setEditingRecord(null)} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-500">取消</button>
-                <button onClick={handleSaveHistoryRecord} className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-100">儲存修正</button>
+                <button onClick={handleSaveHistoryRecord} className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-100 transition active:scale-95">儲存修正</button>
               </div>
             </div>
           </div>
