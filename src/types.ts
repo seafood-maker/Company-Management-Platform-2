@@ -24,6 +24,11 @@ export interface Vehicle {
   currentMileage: number; // 總里程
 }
 
+export interface Project {
+  id: string;
+  name: string;
+}
+
 export interface Schedule {
   id: string;
   userId: string;
@@ -31,13 +36,14 @@ export interface Schedule {
   date: string; 
   startTime: string; 
   endTime: string; 
-  destination: string;
-  purpose: string;
-  category: ScheduleCategory; // 新增：類別
+  // destination: string; // 移除此欄位
+  purpose: string; // 對應你的「事由/目的地」
+  category: ScheduleCategory;
+  projectName: string; // 新增：計畫名稱
+  accompanimentIds: string[]; // 新增：同行人員 ID 列表
   vehicleId: string | null;
   vehicleName?: string;
-  // 里程紀錄
-  startKm?: number; // 出發里程
-  endKm?: number;   // 回來里程
-  mileageCompleted?: boolean; // 是否已填寫里程
+  startKm?: number;
+  endKm?: number;
+  mileageCompleted?: boolean;
 }
