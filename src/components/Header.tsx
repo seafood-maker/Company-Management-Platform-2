@@ -26,7 +26,7 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout, onOpenProfile, onToggle
         {/* 行動端 Logo 區 */}
         <div className="flex items-center space-x-2">
           <i className="fas fa-car-side text-indigo-600 text-xl"></i>
-          <span className="font-bold text-slate-900 tracking-tight">FleetFlow</span>
+          <span className="font-bold text-slate-900 tracking-tight">專案組行程管理</span>
         </div>
       </div>
       
