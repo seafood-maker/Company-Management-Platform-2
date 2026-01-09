@@ -229,8 +229,11 @@ const App: React.FC = () => {
             {view === 'vehicle-mgmt' && (
               <VehicleManagement 
                 vehicles={vehicles} 
+                schedules={schedules}
+                users={users}
                 onSave={handleSaveVehicle} 
                 onDelete={handleDeleteVehicle} 
+                onRefresh={refreshData} 
               />
             )}
 
