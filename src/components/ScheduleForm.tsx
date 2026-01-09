@@ -32,7 +32,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
     category: '外勤',
     projectName: '',
     accompanimentIds: [],
-    vehicleId: 'none'
+    vehicleId: 'none' // 預設為不須用車
   });
   
   const [error, setError] = useState<string | null>(null);
@@ -40,9 +40,16 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
   // 載入編輯資料或預設值
   useEffect(() => {
     if (initialData) {
-      setFormData(initialData);
-    } else if (projects.length > 0) {
-      setFormData(prev => ({ ...prev, projectName: projects[0].name }));
+      // 如果是編輯，確保 vehicleId 如果是 null 要轉回 'none' 供下拉選單顯示
+      setFormData({
+        ...initialData,
+        vehicleId: initialData.vehicleId || 'none'
+      });
+    } else {
+      // 如果是新增，自動帶入第一個計畫作為預設值
+      if (projects.length > 0) {
+        setFormData(prev => ({ ...prev, projectName: projects[0].name }));
+      }
     }
   }, [initialData, projects]);
 
@@ -55,10 +62,10 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
     if (!currentIds.includes(userId)) {
       setFormData({ ...formData, accompanimentIds: [...currentIds, userId] });
     }
-    e.target.value = ""; // 選完後重置選單
+    e.target.value = ""; // 重置選單
   };
 
-  // 同行人員：刪除標籤邏輯
+  // 同行人員：刪除標籤
   const removeAccompaniment = (userId: string) => {
     const currentIds = formData.accompanimentIds || [];
     setFormData({ ...formData, accompanimentIds: currentIds.filter(id => id !== userId) });
@@ -68,18 +75,18 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
     e.preventDefault();
     setError(null);
 
-    // 基本驗證
+    // --- 表單驗證 ---
     if (formData.startTime! >= formData.endTime!) {
       setError("結束時間必須晚於開始時間。");
       return;
     }
 
-    if (!formData.projectName) {
-      setError("請選擇計畫名稱。");
+    if (!formData.projectName || formData.projectName === "") {
+      setError("請選擇計畫名稱。如果沒有選項，請先至「計畫管理」新增。");
       return;
     }
 
-    // 衝突檢查 (僅在有選車時才檢查衝突)
+    // --- 衝突檢查 (只有在真正有選車時才檢查) ---
     if (formData.vehicleId && formData.vehicleId !== 'none') {
       const collisionMsg = checkCollision(formData, schedules);
       if (collisionMsg) {
@@ -88,9 +95,10 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
       }
     }
 
+    // 找到選中的車輛物件
     const selectedVehicle = vehicles.find(v => v.id === formData.vehicleId);
     
-    // 組裝最終資料
+    // --- 組裝最終資料 ---
     const finalData: Schedule = {
       id: initialData?.id || 's' + Date.now(),
       userId: currentUser.id, 
@@ -98,23 +106,25 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
       date: formData.date!,
       startTime: formData.startTime!,
       endTime: formData.endTime!,
-      purpose: formData.purpose!,
+      purpose: formData.purpose || "未填寫事由",
       category: (formData.category as ScheduleCategory) || '其他',
       projectName: formData.projectName!,
       accompanimentIds: formData.accompanimentIds || [],
+      // 如果是 'none' 則轉存為 null，這解決了儲存問題
       vehicleId: formData.vehicleId === 'none' ? null : formData.vehicleId!,
       vehicleName: selectedVehicle ? `${selectedVehicle.name} (${selectedVehicle.plateNumber})` : undefined
     };
 
+    console.log("正在儲存行程資料:", finalData);
     onSave(finalData);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      {/* 視窗調整為更精簡的 max-w-lg */}
+      {/* 窄版視窗 */}
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
         
-        {/* 標題列：字體改為黑色 */}
+        {/* 標題列：黑色字體 */}
         <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex items-center justify-between">
           <h3 className="text-lg font-bold text-black">
             {initialData ? '修改外差行程' : '新增外差行程'}
@@ -124,9 +134,9 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           
-          {/* 錯誤訊息提示區 */}
+          {/* 錯誤提示區 */}
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-xs flex items-start space-x-2">
               <i className="fas fa-exclamation-triangle mt-0.5"></i>
@@ -134,20 +144,20 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
             </div>
           )}
 
-          {/* 第一列：雙欄 - 姓名與類別 */}
+          {/* 第一列：同仁姓名 (藍) & 類別 (橘) */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
-                <i className="fas fa-user-circle mr-1 text-indigo-400"></i> 同仁姓名
+              <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
+                <i className="fas fa-user-circle mr-1 text-blue-500"></i> 同仁姓名
               </label>
               <input 
                 type="text" value={currentUser.name} disabled
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-500 outline-none cursor-not-allowed"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-500 outline-none"
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
-                <i className="fas fa-tags mr-1 text-indigo-400"></i> 類別
+              <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
+                <i className="fas fa-tags mr-1 text-orange-500"></i> 類別
               </label>
               <select 
                 value={formData.category}
@@ -162,10 +172,10 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
             </div>
           </div>
 
-          {/* 第二列：計畫名稱 (單欄) */}
+          {/* 第二列：計畫名稱 (綠) */}
           <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
-              <i className="fas fa-folder-open mr-1 text-indigo-400"></i> 計畫名稱
+            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
+              <i className="fas fa-folder-open mr-1 text-emerald-500"></i> 計畫名稱
             </label>
             <select 
               value={formData.projectName}
@@ -180,10 +190,10 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
             </select>
           </div>
 
-          {/* 第三列：日期選擇器 (單欄) */}
+          {/* 第三列：日期 (紅) */}
           <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
-              <i className="fas fa-calendar-alt mr-1 text-indigo-400"></i> 出差日期
+            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
+              <i className="fas fa-calendar-alt mr-1 text-red-500"></i> 出差日期
             </label>
             <input 
               type="date" required value={formData.date}
@@ -192,11 +202,11 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
             />
           </div>
 
-          {/* 第四列：時間選擇器 (雙欄) */}
+          {/* 第四列：時間 (紫) */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
-                <i className="fas fa-clock mr-1 text-indigo-400"></i> 開始時間
+              <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
+                <i className="fas fa-clock mr-1 text-violet-500"></i> 開始時間
               </label>
               <input 
                 type="time" required value={formData.startTime}
@@ -205,8 +215,8 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
-                <i className="fas fa-history mr-1 text-indigo-400"></i> 結束時間
+              <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
+                <i className="fas fa-hourglass-end mr-1 text-violet-500"></i> 結束時間
               </label>
               <input 
                 type="time" required value={formData.endTime}
@@ -216,10 +226,10 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
             </div>
           </div>
 
-          {/* 第五列：預約車輛 (單欄 + 衝突邏輯) */}
+          {/* 第五列：預約車輛 (靛) */}
           <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
-              <i className="fas fa-car mr-1 text-indigo-400"></i> 預約車輛
+            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
+              <i className="fas fa-car mr-1 text-indigo-500"></i> 預約車輛
             </label>
             <select 
               value={formData.vehicleId || 'none'}
@@ -236,21 +246,19 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
                   (formData.startTime! < s.endTime && formData.endTime! > s.startTime)
                 );
                 const isDisabled = isMaintenance || isBooked;
-
                 return (
                   <option key={v.id} value={v.id} disabled={isDisabled}>
-                    {v.name} ({v.plateNumber}) 
-                    {isMaintenance ? ' [維修中]' : isBooked ? ' [已被預約]' : ''}
+                    {v.name} ({v.plateNumber}) {isMaintenance ? ' [維修中]' : isBooked ? ' [已被預約]' : ''}
                   </option>
                 );
               })}
             </select>
           </div>
 
-          {/* 第六列：同行人員 (下拉選單 + 標籤顯示) */}
+          {/* 第六列：同行人員 (粉) */}
           <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
-              <i className="fas fa-user-friends mr-1 text-indigo-400"></i> 同行人員 (選填)
+            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
+              <i className="fas fa-user-friends mr-1 text-pink-500"></i> 同行人員 (選填)
             </label>
             <select 
               onChange={handleSelectAccompaniment}
@@ -262,13 +270,11 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
                 <option key={u.id} value={u.id}>{u.name}</option>
               ))}
             </select>
-            
-            {/* 已選擇的人員標籤區 */}
             <div className="flex flex-wrap gap-2 min-h-[32px]">
               {formData.accompanimentIds?.map(id => {
                 const user = users.find(u => u.id === id);
                 return (
-                  <span key={id} className="inline-flex items-center bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold border border-indigo-100 animate-in fade-in zoom-in duration-300">
+                  <span key={id} className="inline-flex items-center bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold border border-indigo-100">
                     {user?.name}
                     <button type="button" onClick={() => removeAccompaniment(id)} className="ml-1.5 hover:text-red-500 transition">
                       <i className="fas fa-times-circle"></i>
@@ -276,38 +282,24 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
                   </span>
                 );
               })}
-              {(!formData.accompanimentIds || formData.accompanimentIds.length === 0) && (
-                <span className="text-slate-300 text-[11px] italic mt-1">尚未選擇同行人員</span>
-              )}
             </div>
           </div>
 
-          {/* 第七列：事由/目的地 (單欄) */}
+          {/* 第七列：事由與目的地 (青) */}
           <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
-              <i className="fas fa-pen-fancy mr-1 text-indigo-400"></i> 事由與目的地
+            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
+              <i className="fas fa-pen-fancy mr-1 text-sky-500"></i> 事由與目的地
             </label>
             <textarea 
-              rows={2} required placeholder="請輸入詳細事由與具體地點"
+              rows={2} required placeholder="請輸入出差事由與目的地"
               value={formData.purpose} onChange={e => setFormData({...formData, purpose: e.target.value})}
               className="w-full border border-slate-200 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
             ></textarea>
           </div>
 
-          {/* 按鈕區 */}
           <div className="pt-2 flex space-x-3">
-            <button
-              type="button" onClick={onClose}
-              className="flex-1 px-6 py-2.5 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition text-sm"
-            >
-              取消
-            </button>
-            <button
-              type="submit"
-              className="flex-1 px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition shadow-lg shadow-indigo-100 text-sm"
-            >
-              儲存行程
-            </button>
+            <button type="button" onClick={onClose} className="flex-1 px-6 py-2.5 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition text-sm">取消</button>
+            <button type="submit" className="flex-1 px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition shadow-lg text-sm">儲存行程</button>
           </div>
         </form>
       </div>
