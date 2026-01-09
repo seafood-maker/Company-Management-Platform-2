@@ -37,54 +37,47 @@ export const storage = {
     return querySnapshot.docs.map(d => ({ ...d.data(), id: d.id } as Schedule));
   },
 
-  // [核心關鍵修正] 同步更新車輛總里程數：初始里程 + 所有歷史行程累計
+  // [核心關鍵修正] 同步更新車輛總里程數：只計算「公司接手後」的累積行程里程
   syncVehicleMileage: async (vehicleId: string) => {
     if (!vehicleId || vehicleId === 'none') return;
 
-    // A. 獲取車輛基本資料 (取得 initialMileage)
-    const vehRef = doc(db, "vehicles", vehicleId);
-    const vehSnap = await getDoc(vehRef);
-    if (!vehSnap.exists()) return;
-    const vehData = vehSnap.data() as Vehicle;
-    const initial = vehData.initialMileage || 0;
-
-    // B. 抓取所有行程資料
+    // A. 抓取所有行程資料
     const q = query(collection(db, "schedules"));
     const querySnapshot = await getDocs(q);
     const allSchedules = querySnapshot.docs.map(d => d.data() as Schedule);
     
-    // C. 篩選該車輛「已完成」紀錄並加總 tripMileage
+    // B. 【邏輯更新】：只加總每一趟「結束 - 出發」的差值 (tripMileage)
+    // 這裡完全不加 initialMileage，所以 totalMileage 代表的是「公司接手後跑了多少」
     const tripSum = allSchedules
       .filter(s => String(s.vehicleId) === String(vehicleId) && s.mileageCompleted)
       .reduce((sum, s) => {
-        // 如果有 tripMileage 就直接加，沒有的話就用 end - start 算
+        // 優先取 tripMileage，若無則計算差值
         const trip = s.tripMileage !== undefined ? s.tripMileage : ((s.endKm || 0) - (s.startKm || 0));
         return sum + (trip > 0 ? trip : 0);
       }, 0);
 
-    // D. 最終計算：總行駛里程 = 初始里程 + 累計行駛距離
-    const finalTotal = initial + tripSum;
-
-    await updateDoc(vehRef, { totalMileage: finalTotal });
-    console.log(`同步完成：車輛 ${vehicleId} 總行駛里程已校正為: ${finalTotal} (含初始里程 ${initial})`);
+    // C. 更新到車輛資料表中 (totalMileage = 公司累積行駛里程)
+    const vehRef = doc(db, "vehicles", vehicleId);
+    await updateDoc(vehRef, { totalMileage: tripSum });
+    console.log(`同步完成：車輛 ${vehicleId} 總行駛里程已更新為: ${tripSum} (不含初始里程)`);
   },
 
   // 修正存檔邏輯：儲存後自動觸發重新加總
   saveSchedule: async (schedule: Schedule) => {
-    // 存檔前自動計算當次行駛里程 (Trip Mileage)
+    // 存檔前自動計算當次行駛里程
     if (schedule.mileageCompleted && schedule.startKm !== undefined && schedule.endKm !== undefined) {
       schedule.tripMileage = schedule.endKm - schedule.startKm;
     }
 
     await setDoc(doc(db, "schedules", schedule.id), schedule);
     
-    // 儲存後同步車輛總里程
+    // 如果這筆紀錄有用到車，就必須同步該車的總里程
     if (schedule.vehicleId && schedule.vehicleId !== 'none') {
       await storage.syncVehicleMileage(schedule.vehicleId);
     }
   },
 
-  // 修正刪除邏輯：刪除後重新計算總里程
+  // 修正刪除邏輯：刪除後也要重新加總里程
   deleteSchedule: async (id: string) => {
     const docRef = doc(db, "schedules", id);
     const docSnap = await getDoc(docRef);
@@ -92,6 +85,7 @@ export const storage = {
 
     await deleteDoc(docRef);
 
+    // 刪除紀錄後，也要同步更新車輛總里程
     if (data && data.vehicleId && data.vehicleId !== 'none') {
       await storage.syncVehicleMileage(data.vehicleId);
     }
@@ -118,7 +112,7 @@ export const storage = {
       mileageCompleted: true
     });
 
-    // 觸發重新加總 (包含初始里程)
+    // 填報完畢後，立即觸發總里程同步 (計算 tripSum)
     await storage.syncVehicleMileage(vehicleId);
   },
 
@@ -135,7 +129,7 @@ export const storage = {
   }
 }; // storage 物件結束
 
-// --- 6. 衝突檢查邏輯 (輔助函式) ---
+// --- 6. 衝突檢查邏輯 ---
 export const checkCollision = (newData: Partial<Schedule>, allSchedules: Schedule[]): string | null => {
   if (!newData.vehicleId || newData.vehicleId === 'none') return null;
   
