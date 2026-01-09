@@ -37,48 +37,61 @@ export const storage = {
     return querySnapshot.docs.map(d => ({ ...d.data(), id: d.id } as Schedule));
   },
 
-  // [關鍵新增] 同步更新車輛總里程數：重新掃描該車所有已填寫行程並加總
+  // [核心關鍵] 同步更新車輛總里程數：重新掃描該車所有歷史行程紀錄並重新加總
   syncVehicleMileage: async (vehicleId: string) => {
     if (!vehicleId || vehicleId === 'none') return;
 
-    const q = query(collection(db, "schedules"), orderBy("date", "asc"));
+    // 抓取所有行程資料
+    const q = query(collection(db, "schedules"));
     const querySnapshot = await getDocs(q);
     const allSchedules = querySnapshot.docs.map(d => d.data() as Schedule);
     
-    // 篩選該車輛所有已完成的行程，重新計算總里程 (tripMileage 的加總)
+    // 篩選出該車輛「已完成里程填報」的紀錄，並將 tripMileage 進行加總
     const total = allSchedules
       .filter(s => String(s.vehicleId) === String(vehicleId) && s.mileageCompleted)
-      .reduce((sum, s) => sum + (s.tripMileage || 0), 0);
+      .reduce((sum, s) => {
+        // 如果有 tripMileage 就直接加，沒有的話就用 end - start 算 (防止舊資料漏掉欄位)
+        const trip = s.tripMileage !== undefined ? s.tripMileage : ((s.endKm || 0) - (s.startKm || 0));
+        return sum + (trip > 0 ? trip : 0);
+      }, 0);
 
+    // 更新到車輛資料表中
     const vehRef = doc(db, "vehicles", vehicleId);
     await updateDoc(vehRef, { totalMileage: total });
+    console.log(`同步觸發：車輛 ${vehicleId} 重新計算後的總里程為: ${total}`);
   },
 
-  // 修正存檔邏輯：支援後台修改時自動同步車輛總里程
+  // 修正存檔邏輯：儲存後自動觸發重新加總
   saveSchedule: async (schedule: Schedule) => {
+    // 存檔前自動計算當次行駛里程 (Trip Mileage)
+    if (schedule.mileageCompleted && schedule.startKm !== undefined && schedule.endKm !== undefined) {
+      schedule.tripMileage = schedule.endKm - schedule.startKm;
+    }
+
     await setDoc(doc(db, "schedules", schedule.id), schedule);
     
-    // 如果這筆行程有紀錄車輛且已完成里程，儲存後立即更新車輛總表
-    if (schedule.vehicleId && schedule.mileageCompleted) {
+    // 如果這筆紀錄有用到車，就必須同步該車的總里程
+    if (schedule.vehicleId && schedule.vehicleId !== 'none') {
       await storage.syncVehicleMileage(schedule.vehicleId);
     }
   },
 
+  // 修正刪除邏輯：刪除後也要重新加總里程
   deleteSchedule: async (id: string) => {
-    // 刪除前先抓取資料，確認是否需要同步車輛里程
+    // 刪除前先抓取這筆資料，才知道是哪一台車需要重新同步
     const docRef = doc(db, "schedules", id);
     const docSnap = await getDoc(docRef);
     const data = docSnap.data() as Schedule;
 
     await deleteDoc(docRef);
 
-    // 刪除後，如果該行程原本有里程紀錄，則重新同步車輛里程
-    if (data && data.vehicleId && data.mileageCompleted) {
+    // 刪除後同步
+    if (data && data.vehicleId && data.vehicleId !== 'none') {
       await storage.syncVehicleMileage(data.vehicleId);
     }
   },
 
-  // --- 4. 里程填報管理 (修正後的累加與同步邏輯) ---
+  // --- 4. 里程填報管理 (與填報介面連動) ---
   updateMileage: async (
     scheduleId: string, 
     vehicleId: string, 
@@ -89,7 +102,7 @@ export const storage = {
   ) => {
     const tripMileage = endKm - startKm;
 
-    // A. 更新行程紀錄：加入當次計算的里程與勾選狀態
+    // A. 更新行程紀錄：填入填報數據
     const scheduleRef = doc(db, "schedules", scheduleId);
     await updateDoc(scheduleRef, {
       startKm,
@@ -100,7 +113,7 @@ export const storage = {
       mileageCompleted: true
     });
 
-    // B. 呼叫同步函式，更新車輛的「總行駛里程數」
+    // B. 觸發重新加總，更新車輛總表數據
     await storage.syncVehicleMileage(vehicleId);
   },
 
@@ -124,6 +137,7 @@ export const checkCollision = (newData: Partial<Schedule>, allSchedules: Schedul
   const collision = allSchedules.find(s => {
     if (s.id === newData.id) return false; 
     if (s.date === newData.date && s.vehicleId === newData.vehicleId) {
+      // 時間重疊判定
       return (newData.startTime! < s.endTime && newData.endTime! > s.startTime);
     }
     return false;
