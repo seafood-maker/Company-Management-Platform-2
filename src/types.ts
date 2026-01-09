@@ -28,6 +28,7 @@ export interface Vehicle {
   name: string;
   type: string;
   status: 'available' | 'maintenance'; // 可預約 / 維修中
+  initialMileage: number; // 【新增】車輛刚來時的里程數
   totalMileage: number; // 修正名稱：總行駛里程數 (原為 currentMileage)
 }
 
