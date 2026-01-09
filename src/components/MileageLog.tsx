@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { Schedule } from '../types';
+import { Schedule, Vehicle } from '../types';
 import { storage } from '../services/storage';
 
 interface MileageLogProps {
   schedules: Schedule[];
+  vehicles: Vehicle[]; // 新增：傳入車輛清單以獲取初始里程
   currentUser: any;
   onRefresh: () => void;
 }
 
-const MileageLog: React.FC<MileageLogProps> = ({ schedules, currentUser, onRefresh }) => {
+const MileageLog: React.FC<MileageLogProps> = ({ schedules, vehicles, currentUser, onRefresh }) => {
   // 用於存放使用者輸入的「本次結束里程」以及勾選狀態
   const [inputData, setInputData] = useState<{ 
     [key: string]: { end?: number, gas?: boolean, wash?: boolean } 
@@ -30,7 +31,7 @@ const MileageLog: React.FC<MileageLogProps> = ({ schedules, currentUser, onRefre
     }
 
     try {
-      // 呼叫 storage，傳入：行程ID, 車輛ID, 起始(自動計算), 結束(使用者填寫), 加油, 洗車
+      // 呼叫 storage，傳入：行程ID, 車輛ID, 起始(自動帶入), 結束(手動填寫), 加油, 洗車
       await storage.updateMileage(s.id, s.vehicleId!, calculatedStart, end, !!data.gas, !!data.wash);
       alert("里程填報成功！系統已更新車輛總行駛里程數。");
       onRefresh();
@@ -42,7 +43,7 @@ const MileageLog: React.FC<MileageLogProps> = ({ schedules, currentUser, onRefre
 
   return (
     <div className="bg-white p-6 rounded-2xl border shadow-sm animate-in fade-in duration-500">
-      <h3 className="text-xl font-bold mb-6 flex items-center text-black">
+      <h3 className="text-xl font-bold mb-6 text-black flex items-center">
         <i className="fas fa-tachometer-alt mr-2 text-indigo-500"></i>
         車輛里程填報
       </h3>
@@ -54,42 +55,49 @@ const MileageLog: React.FC<MileageLogProps> = ({ schedules, currentUser, onRefre
         </div>
       ) : (
         <div className="space-y-4">
-          {/* 依照日期與時間排序待填寫清單，舊的排在上面 */}
+          {/* 依照日期與時間排序，舊的排在上面引導填寫 */}
           {myPendingSchedules
             .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
             .map(s => {
               
               // 【核心邏輯 A：阻斷機制】檢查該車是否有任何「更早」但「未填寫」的行程
-              // 條件：同一台車、未完成、(日期更早 OR 同日期但時間更早)
               const hasEarlierIncomplete = schedules.some(prev => 
                 String(prev.vehicleId) === String(s.vehicleId) && 
                 !prev.mileageCompleted && 
                 (prev.date < s.date || (prev.date === s.date && prev.startTime < s.startTime))
               );
 
-              // 【核心邏輯 B：溯源帶入機制】找出該車「最後一筆已填寫」的結束里程作為起點
-              // 邏輯：過濾該車已完成紀錄 -> 按日期與時間「由新到舊」排序 -> 取第一筆
-              const lastFinishedRecord = [...schedules]
+              // 【核心邏輯 B：精準溯源帶入機制】
+              // 找該車在此行程「之前」最後一筆「已填寫」紀錄
+              const historyBeforeThis = [...schedules]
                 .filter(prev => 
                   String(prev.vehicleId) === String(s.vehicleId) && 
-                  prev.mileageCompleted
+                  prev.mileageCompleted &&
+                  (prev.date < s.date || (prev.date === s.date && prev.startTime < s.startTime))
                 )
-                .sort((a, b) => {
-                  // 先比日期
-                  const dateCompare = b.date.localeCompare(a.date);
-                  if (dateCompare !== 0) return dateCompare;
-                  // 日期相同比開始時間
-                  return b.startTime.localeCompare(a.startTime);
-                })[0]; // 取得距離這筆行程「最近」的一筆歷史結束紀錄
+                .sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime));
 
-              // 如果完全沒有歷史紀錄，則起點為 0
-              const calculatedStart = lastFinishedRecord ? (lastFinishedRecord.endKm || 0) : 0;
+              const lastRecord = historyBeforeThis[0]; // 取得距離最近的一筆歷史結束紀錄
+
+              let calculatedStart = 0;
+              let startLabel = "";
+
+              if (lastRecord) {
+                // 情境 1: 抓到上一筆回程里程
+                calculatedStart = lastRecord.endKm || 0;
+                startLabel = "上次結束里程";
+              } else {
+                // 情境 2: 完全沒紀錄 (第一跑) -> 抓車輛管理設定的「初始里程」
+                const v = vehicles.find(veh => String(veh.id) === String(s.vehicleId));
+                calculatedStart = v ? v.initialMileage : 0;
+                startLabel = "新車初始里程";
+              }
 
               return (
                 <div 
                   key={s.id} 
                   className={`border p-5 rounded-2xl flex flex-col lg:flex-row lg:items-center gap-5 transition-all ${
-                    hasEarlierIncomplete ? 'bg-red-50 border-red-100' : 'bg-slate-50 hover:bg-white hover:shadow-md border-slate-100'
+                    hasEarlierIncomplete ? 'bg-red-50 border-red-100 opacity-90' : 'bg-slate-50 hover:bg-white hover:shadow-md border-slate-100'
                   }`}
                 >
                   {/* 左側：行程資訊 */}
@@ -109,21 +117,21 @@ const MileageLog: React.FC<MileageLogProps> = ({ schedules, currentUser, onRefre
                   {/* 右側：操作區 */}
                   {hasEarlierIncomplete ? (
                     /* 阻斷狀態 UI */
-                    <div className="flex items-center bg-white px-5 py-3 rounded-xl border border-red-200 text-red-600 shadow-sm animate-pulse">
-                      <i className="fas fa-exclamation-triangle mr-3 text-red-500 text-lg"></i>
+                    <div className="flex items-center bg-white px-5 py-3 rounded-xl border border-red-200 text-red-600 shadow-sm">
+                      <i className="fas fa-exclamation-triangle mr-3 text-red-500 text-lg animate-pulse"></i>
                       <div className="text-left">
                         <p className="text-sm font-bold">上次行車紀錄未填寫</p>
                         <p className="text-[11px] opacity-80">請先補齊該車較早日期的紀錄後再填報本單</p>
                       </div>
                     </div>
                   ) : (
-                    /* 正常填報 UI (保留所有彩色圖標與功能) */
+                    /* 正常填報 UI */
                     <div className="flex flex-wrap items-center gap-4">
                       
-                      {/* 自動帶入的起點標籤 (藍色圖案) */}
-                      <div className="bg-blue-50 px-4 py-2 rounded-xl border border-blue-100 shadow-sm">
+                      {/* 自動帶入的起始里程 (藍色標籤) */}
+                      <div className="bg-blue-50 px-4 py-2 rounded-xl border border-blue-100 shadow-sm min-w-[120px]">
                         <p className="text-[10px] font-bold text-blue-400 uppercase leading-none mb-1">
-                          <i className="fas fa-play-circle mr-1"></i> 上次結束里程 (起點)
+                          <i className="fas fa-play-circle mr-1"></i> {startLabel}
                         </p>
                         <p className="text-lg font-mono font-bold text-blue-700 leading-none">
                           {calculatedStart} <span className="text-xs">km</span>
@@ -134,7 +142,7 @@ const MileageLog: React.FC<MileageLogProps> = ({ schedules, currentUser, onRefre
                         <i className="fas fa-chevron-right"></i>
                       </div>
 
-                      {/* 本次結束里程輸入 (紅色圖案) */}
+                      {/* 本次結束里程輸入 (紅色標籤) */}
                       <div className="relative">
                         <p className="text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1">本次結束里程</p>
                         <div className="relative">
@@ -148,7 +156,7 @@ const MileageLog: React.FC<MileageLogProps> = ({ schedules, currentUser, onRefre
                         </div>
                       </div>
 
-                      {/* 加油、洗車勾選 (橘色與天藍色圖案) */}
+                      {/* 加油、洗車勾選 (橘色與天藍色) */}
                       <div className="flex items-center space-x-4 px-2">
                         <label className="flex items-center space-x-2 cursor-pointer group">
                           <input
