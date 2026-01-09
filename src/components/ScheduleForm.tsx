@@ -32,7 +32,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
     category: '外勤',
     projectName: '',
     accompanimentIds: [],
-    vehicleId: 'none' // 預設為不須用車
+    vehicleId: 'none' 
   });
   
   const [error, setError] = useState<string | null>(null);
@@ -40,13 +40,12 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
   // 載入編輯資料或預設值
   useEffect(() => {
     if (initialData) {
-      // 如果是編輯，確保 vehicleId 如果是 null 要轉回 'none' 供下拉選單顯示
       setFormData({
         ...initialData,
-        vehicleId: initialData.vehicleId || 'none'
+        vehicleId: initialData.vehicleId || 'none',
+        accompanimentIds: initialData.accompanimentIds || []
       });
     } else {
-      // 如果是新增，自動帶入第一個計畫作為預設值
       if (projects.length > 0) {
         setFormData(prev => ({ ...prev, projectName: projects[0].name }));
       }
@@ -82,7 +81,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
     }
 
     if (!formData.projectName || formData.projectName === "") {
-      setError("請選擇計畫名稱。如果沒有選項，請先至「計畫管理」新增。");
+      setError("請選擇計畫名稱。");
       return;
     }
 
@@ -95,14 +94,13 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
       }
     }
 
-    // 找到選中的車輛物件
     const selectedVehicle = vehicles.find(v => v.id === formData.vehicleId);
     
-    // --- 組裝最終資料 ---
+    // --- 組裝最終資料 (關鍵修正：vehicleId 的處理) ---
     const finalData: Schedule = {
       id: initialData?.id || 's' + Date.now(),
-      userId: currentUser.id, 
-      userName: currentUser.name,
+      userId: initialData?.userId || currentUser.id, 
+      userName: initialData?.userName || currentUser.name,
       date: formData.date!,
       startTime: formData.startTime!,
       endTime: formData.endTime!,
@@ -110,21 +108,20 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
       category: (formData.category as ScheduleCategory) || '其他',
       projectName: formData.projectName!,
       accompanimentIds: formData.accompanimentIds || [],
-      // 如果是 'none' 則轉存為 null，這解決了儲存問題
+      // 如果選擇 'none'，則儲存為 null，避免資料庫錯誤
       vehicleId: formData.vehicleId === 'none' ? null : formData.vehicleId!,
-      vehicleName: selectedVehicle ? `${selectedVehicle.name} (${selectedVehicle.plateNumber})` : undefined
+      vehicleName: selectedVehicle ? `${selectedVehicle.name} (${selectedVehicle.plateNumber})` : ""
     };
 
-    console.log("正在儲存行程資料:", finalData);
+    console.log("提交行程資料:", finalData);
     onSave(finalData);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      {/* 窄版視窗 */}
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-lg overflow-hidden animate-in fade-in zoom-in duration-200" style={{maxWidth: '500px'}}>
         
-        {/* 標題列：黑色字體 */}
+        {/* 標題列 */}
         <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex items-center justify-between">
           <h3 className="text-lg font-bold text-black">
             {initialData ? '修改外差行程' : '新增外差行程'}
@@ -136,7 +133,6 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           
-          {/* 錯誤提示區 */}
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-xs flex items-start space-x-2">
               <i className="fas fa-exclamation-triangle mt-0.5"></i>
@@ -144,7 +140,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
             </div>
           )}
 
-          {/* 第一列：同仁姓名 (藍) & 類別 (橘) */}
+          {/* 第一列：姓名與類別 (彩色圖示) */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
@@ -172,7 +168,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
             </div>
           </div>
 
-          {/* 第二列：計畫名稱 (綠) */}
+          {/* 第二列：計畫名稱 (彩色圖示) */}
           <div>
             <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
               <i className="fas fa-folder-open mr-1 text-emerald-500"></i> 計畫名稱
@@ -190,7 +186,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
             </select>
           </div>
 
-          {/* 第三列：日期 (紅) */}
+          {/* 第三列：日期 (彩色圖示) */}
           <div>
             <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
               <i className="fas fa-calendar-alt mr-1 text-red-500"></i> 出差日期
@@ -202,7 +198,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
             />
           </div>
 
-          {/* 第四列：時間 (紫) */}
+          {/* 第四列：時間 (彩色圖示) */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
@@ -226,7 +222,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
             </div>
           </div>
 
-          {/* 第五列：預約車輛 (靛) */}
+          {/* 第五列：預約車輛 (彩色圖示) */}
           <div>
             <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
               <i className="fas fa-car mr-1 text-indigo-500"></i> 預約車輛
@@ -255,7 +251,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
             </select>
           </div>
 
-          {/* 第六列：同行人員 (粉) */}
+          {/* 第六列：同行人員 (彩色圖示) */}
           <div>
             <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
               <i className="fas fa-user-friends mr-1 text-pink-500"></i> 同行人員 (選填)
@@ -285,13 +281,13 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
             </div>
           </div>
 
-          {/* 第七列：事由與目的地 (青) */}
+          {/* 第七列：事由 (彩色圖示) */}
           <div>
             <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
               <i className="fas fa-pen-fancy mr-1 text-sky-500"></i> 事由與目的地
             </label>
             <textarea 
-              rows={2} required placeholder="請輸入出差事由與目的地"
+              rows={2} required placeholder="請輸入出差事由與所在地點"
               value={formData.purpose} onChange={e => setFormData({...formData, purpose: e.target.value})}
               className="w-full border border-slate-200 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
             ></textarea>
