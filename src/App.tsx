@@ -10,6 +10,7 @@ import Header from './components/Header';
 import UserManagement from './components/UserManagement';
 import VehicleManagement from './components/VehicleManagement'; 
 import ProjectManagement from './components/ProjectManagement'; 
+import StatsView from './components/StatsView'; // 確保匯入統計組件
 import MileageLog from './components/MileageLog'; 
 import ProfileSettings from './components/ProfileSettings'; 
 
@@ -24,7 +25,7 @@ const App: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | undefined>(undefined);
   
-  // 【新增】手機版選單開關狀態
+  // 手機版選單開關狀態
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // 頁面視圖狀態
@@ -102,7 +103,7 @@ const App: React.FC = () => {
     }
   };
 
-  // --- 6. 其他管理邏輯 ---
+  // --- 6. 人員、車輛、計畫管理邏輯 ---
   const handleAddUser = async (newUser: User) => {
     try {
       await storage.saveUser(newUser);
@@ -185,7 +186,7 @@ const App: React.FC = () => {
     setIsFormOpen(true);
   };
 
-  // --- 7. 登入檢查 ---
+  // --- 7. 介面渲染檢查 ---
   if (!currentUser) {
     return <Login onLogin={handleLogin} users={users.length > 0 ? users : MOCK_USERS} />;
   }
@@ -193,12 +194,12 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden relative">
       
-      {/* 1. 側邊欄：傳入手機版所需的開關狀態與關閉函式 */}
+      {/* 側邊欄：包含手機版開關狀態 */}
       <Sidebar 
         onAddSchedule={() => { 
           setEditingSchedule(undefined); 
           setIsFormOpen(true); 
-          setIsMobileMenuOpen(false); // 點擊新增後自動收起手機選單
+          setIsMobileMenuOpen(false); 
         }} 
         activeView={view}
         setView={(v) => { setView(v); setIsMobileMenuOpen(false); }}
@@ -209,7 +210,7 @@ const App: React.FC = () => {
       
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         
-        {/* 2. 標題列：傳入漢堡按鈕的切換函式 */}
+        {/* 標題列 */}
         <Header 
           user={currentUser} 
           onLogout={handleLogout} 
@@ -220,6 +221,7 @@ const App: React.FC = () => {
         <main className="flex-1 overflow-y-auto p-3 md:p-6">
           <div className="max-w-6xl mx-auto">
             
+            {/* 視圖切換邏輯 */}
             {view === 'calendar' && (
               <CalendarView 
                 schedules={schedules} 
@@ -284,7 +286,7 @@ const App: React.FC = () => {
         </main>
       </div>
 
-      {/* 3. 彈出表單 (Modal) */}
+      {/* 彈出表單 (Modal) */}
       {isFormOpen && (
         <ScheduleForm
           onClose={() => setIsFormOpen(false)}
