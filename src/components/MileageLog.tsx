@@ -67,5 +67,3 @@ const MileageLog: React.FC<{ schedules: Schedule[], currentUser: any, onRefresh:
   );
 };
 export default MileageLog;
-};
-export default MileageLog;
