@@ -76,3 +76,21 @@ export const checkCollision = (newData: Partial<Schedule>, allSchedules: Schedul
   });
   return collision ? `此時段該車輛已被 ${collision.userName} 預約` : null;
 };
+
+  // --- 計畫管理 ---
+  getProjects: async (): Promise<Project[]> => {
+    const querySnapshot = await getDocs(collection(db, "projects"));
+    return querySnapshot.docs.map(d => ({ ...d.data(), id: d.id } as Project));
+  },
+  saveProject: async (project: Project) => {
+    await setDoc(doc(db, "projects", project.id), project);
+  },
+  deleteProject: async (id: string) => {
+    await deleteDoc(doc(db, "projects", id));
+  },
+
+  // 修正行程儲存邏輯，確保 vehicleId 為 null 時也能儲存
+  saveSchedule: async (schedule: Schedule) => {
+    await setDoc(doc(db, "schedules", schedule.id), schedule);
+  }
+};
